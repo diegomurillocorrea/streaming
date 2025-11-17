@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient as createBrowserClient } from "@/utils/supabase/client";
 
@@ -49,7 +50,6 @@ export default function AccountsAdminPage() {
 
     const [companies, setCompanies] = useState([]);
     const [emails, setEmails] = useState([]);
-    const [passwords, setPasswords] = useState([]);
     const [cards, setCards] = useState([]);
 
     const [loadingAccounts, setLoadingAccounts] = useState(true);
@@ -83,7 +83,6 @@ export default function AccountsAdminPage() {
         const [
             { data: companiesData, error: companiesErr },
             { data: emailsData, error: emailsErr },
-            { data: passwordsData, error: passwordsErr },
             { data: cardsData, error: cardsErr },
         ] = await Promise.all([
             supabase
@@ -95,25 +94,19 @@ export default function AccountsAdminPage() {
                 .select("*")
                 .order("email_address", { ascending: true }),
             supabase
-                .from("passwords")
-                .select("*")
-                .order("created_at", { ascending: false }),
-            supabase
                 .from("cards")
                 .select("*")
                 .order("created_at", { ascending: false }),
         ]);
 
-        if (companiesErr || emailsErr || passwordsErr || cardsErr) {
-            const firstErr =
-                companiesErr || emailsErr || passwordsErr || cardsErr;
+        if (companiesErr || emailsErr || cardsErr) {
+            const firstErr = companiesErr || emailsErr || cardsErr;
             console.error(firstErr);
             setRefsError(firstErr.message || "Unable to load reference data.");
         }
 
         if (!companiesErr) setCompanies(companiesData || []);
         if (!emailsErr) setEmails(emailsData || []);
-        if (!passwordsErr) setPasswords(passwordsData || []);
         if (!cardsErr) setCards(cardsData || []);
 
         setLoadingRefs(false);
@@ -157,10 +150,9 @@ export default function AccountsAdminPage() {
     const getEmailAddress = (id) =>
         emails.find((e) => e.id_email === id)?.email_address || "-";
 
-    const getPasswordDisplay = (id) => {
-        const pwd = passwords.find((p) => p.id_password === id)?.password;
-        if (!pwd) return "-";
-        const length = Math.min(pwd.length, 8);
+    const getPasswordMask = (password) => {
+        if (!password) return "-";
+        const length = Math.min(password.length, 8);
         return "•".repeat(length || 6);
     };
 
@@ -219,47 +211,26 @@ export default function AccountsAdminPage() {
         setSaving(true);
 
         try {
-            // 1) Crear la fila en passwords
-            const { data: passwordRow, error: passwordError } = await supabase
-                .from("passwords")
-                .insert({ password: formPassword.trim() })
-                .select()
-                .single();
-
-            if (passwordError) {
-                console.error(passwordError);
-                setAccountsError(
-                    passwordError.message || "Unable to create password."
-                );
-                return;
-            }
-
-            // actualizar cache local de passwords
-            setPasswords((prev) => [...prev, passwordRow]);
-
-            // 2) Crear la account ligada a ese password
             const payload = {
                 account_name: formAccountName.trim(),
                 id_company: Number(formCompanyId),
                 id_email: Number(formEmailId),
-                id_password: passwordRow.id_password,
                 id_card: Number(formCardId),
                 payment_date: formPaymentDate,
+                password: formPassword.trim(),
             };
 
-            const { data, error } = await supabase
+            const { error: accountErr } = await supabase
                 .from("accounts")
-                .insert(payload)
-                .select()
-                .single();
+                .insert(payload);
 
-            if (error) {
-                console.error(error);
-                setAccountsError(error.message || "Unable to create account.");
+            if (accountErr) {
+                console.error(accountErr);
+                setAccountsError(accountErr.message || "Unable to create account.");
                 return;
             }
 
-            setAccounts((prev) => [data, ...prev]);
+            await loadAccounts();
             setCreateOpen(false);
         } finally {
             setSaving(false);
@@ -274,10 +245,7 @@ export default function AccountsAdminPage() {
             row.id_company != null ? String(row.id_company) : ""
         );
         setFormEmailId(row.id_email != null ? String(row.id_email) : "");
-        const passwordRow = passwords.find(
-            (p) => p.id_password === row.id_password
-        );
-        setFormPassword(passwordRow?.password || "");
+        setFormPassword(row.password || "");
         setFormCardId(row.id_card != null ? String(row.id_card) : "");
         setFormPaymentDate(dbDateToInput(row.payment_date));
         setAccountsError("");
@@ -303,66 +271,19 @@ export default function AccountsAdminPage() {
         setSaving(true);
 
         try {
-            // 1) Upsert del password
-            let passwordId = currentAccount.id_password;
-
-            if (passwordId) {
-                const { data: passwordRow, error: passwordError } = await supabase
-                    .from("passwords")
-                    .update({ password: formPassword.trim() })
-                    .eq("id_password", passwordId)
-                    .select()
-                    .single();
-
-                if (passwordError) {
-                    console.error(passwordError);
-                    setAccountsError(
-                        passwordError.message || "Unable to update password."
-                    );
-                    return;
-                }
-
-                passwordId = passwordRow.id_password;
-                setPasswords((prev) =>
-                    prev.map((p) =>
-                        p.id_password === passwordRow.id_password ? passwordRow : p
-                    )
-                );
-            } else {
-                const { data: passwordRow, error: passwordError } = await supabase
-                    .from("passwords")
-                    .insert({ password: formPassword.trim() })
-                    .select()
-                    .single();
-
-                if (passwordError) {
-                    console.error(passwordError);
-                    setAccountsError(
-                        passwordError.message || "Unable to create password."
-                    );
-                    return;
-                }
-
-                passwordId = passwordRow.id_password;
-                setPasswords((prev) => [...prev, passwordRow]);
-            }
-
-            // 2) Update de la account
             const payload = {
                 account_name: formAccountName.trim(),
                 id_company: Number(formCompanyId),
                 id_email: Number(formEmailId),
-                id_password: passwordId,
                 id_card: Number(formCardId),
                 payment_date: formPaymentDate,
+                password: formPassword.trim(),
             };
 
-            const { data, error } = await supabase
+            const { error } = await supabase
                 .from("accounts")
                 .update(payload)
-                .eq("id_account", currentAccount.id_account)
-                .select()
-                .single();
+                .eq("id_account", currentAccount.id_account);
 
             if (error) {
                 console.error(error);
@@ -370,11 +291,7 @@ export default function AccountsAdminPage() {
                 return;
             }
 
-            setAccounts((prev) =>
-                prev.map((item) =>
-                    item.id_account === data.id_account ? data : item
-                )
-            );
+            await loadAccounts();
             setEditOpen(false);
         } finally {
             setSaving(false);
@@ -507,7 +424,7 @@ export default function AccountsAdminPage() {
                                                 {getEmailAddress(row.id_email)}
                                             </td>
                                             <td className="py-2 pr-4 align-middle text-emerald-200">
-                                                {getPasswordDisplay(row.id_password)}
+                                                {getPasswordMask(row.password)}
                                             </td>
                                             <td className="py-2 pr-4 align-middle text-emerald-200">
                                                 {getCardLabel(row.id_card)}
@@ -519,7 +436,9 @@ export default function AccountsAdminPage() {
                                             </td>
                                             <td className="py-2 pr-4 align-middle text-emerald-200">
                                                 {row.created_at
-                                                    ? new Date(row.created_at).toLocaleString()
+                                                    ? new Date(
+                                                        row.created_at
+                                                    ).toLocaleString()
                                                     : "-"}
                                             </td>
                                             <td className="py-2 pr-0 align-middle">
@@ -536,7 +455,9 @@ export default function AccountsAdminPage() {
                                                         size="icon"
                                                         variant="outline"
                                                         className="border-red-500/60 text-red-400 hover:bg-red-500 hover:text-white cursor-pointer"
-                                                        onClick={() => openDeleteModal(row)}
+                                                        onClick={() =>
+                                                            openDeleteModal(row)
+                                                        }
                                                     >
                                                         <LuTrash2 className="h-4 w-4" />
                                                     </Button>
@@ -578,7 +499,9 @@ export default function AccountsAdminPage() {
                                 type="text"
                                 placeholder="e.g. Netflix main"
                                 value={formAccountName}
-                                onChange={(e) => setFormAccountName(e.target.value)}
+                                onChange={(e) =>
+                                    setFormAccountName(e.target.value)
+                                }
                                 disabled={saving}
                             />
                         </div>
@@ -636,7 +559,9 @@ export default function AccountsAdminPage() {
                                 type="text" // cámbialo a "password" si quieres ocultarlo
                                 placeholder="Type the password for this account"
                                 value={formPassword}
-                                onChange={(e) => setFormPassword(e.target.value)}
+                                onChange={(e) =>
+                                    setFormPassword(e.target.value)
+                                }
                                 disabled={saving}
                             />
                         </div>
@@ -672,7 +597,9 @@ export default function AccountsAdminPage() {
                                 id="new-payment-date"
                                 type="date"
                                 value={formPaymentDate}
-                                onChange={(e) => setFormPaymentDate(e.target.value)}
+                                onChange={(e) =>
+                                    setFormPaymentDate(e.target.value)
+                                }
                                 disabled={saving}
                             />
                         </div>
@@ -727,7 +654,9 @@ export default function AccountsAdminPage() {
                                 id="edit-account-name"
                                 type="text"
                                 value={formAccountName}
-                                onChange={(e) => setFormAccountName(e.target.value)}
+                                onChange={(e) =>
+                                    setFormAccountName(e.target.value)
+                                }
                                 disabled={saving}
                             />
                         </div>
@@ -784,7 +713,9 @@ export default function AccountsAdminPage() {
                                 id="edit-account-password"
                                 type="text"
                                 value={formPassword}
-                                onChange={(e) => setFormPassword(e.target.value)}
+                                onChange={(e) =>
+                                    setFormPassword(e.target.value)
+                                }
                                 disabled={saving}
                             />
                         </div>
@@ -820,7 +751,9 @@ export default function AccountsAdminPage() {
                                 id="edit-payment-date"
                                 type="date"
                                 value={formPaymentDate}
-                                onChange={(e) => setFormPaymentDate(e.target.value)}
+                                onChange={(e) =>
+                                    setFormPaymentDate(e.target.value)
+                                }
                                 disabled={saving}
                             />
                         </div>
