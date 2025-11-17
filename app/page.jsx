@@ -1,20 +1,20 @@
 import { createClient as createServerClient } from "@/utils/supabase/server";
 import {
   Card,
-  CardHeader,
   CardTitle,
-  CardDescription,
+  CardHeader,
   CardContent,
+  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   LuMail,
-  LuBuilding2,
-  LuWallet,
   LuUsers,
-  LuMonitorPlay,
-  LuCreditCard,
+  LuWallet,
   LuSettings,
+  LuBuilding2,
+  LuCreditCard,
+  LuMonitorPlay,
 } from "react-icons/lu";
 import Link from "next/link";
 import LogoutButton from "@/components/interface/LogoutButton";
