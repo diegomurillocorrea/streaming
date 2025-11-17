@@ -43,9 +43,14 @@ export default function AdminSidebar() {
     return (
         <aside className="h-screen sticky top-0 bg-emerald-950 border-r border-emerald-800 w-[15%] min-w-[220px] flex flex-col">
             <div className="px-4 py-4 border-b border-emerald-800">
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
-                    Streaming Murillo
-                </p>
+                <Link
+                    href="/"
+                    className="inline-block cursor-pointer"
+                >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300 hover:text-emerald-100 transition-colors">
+                        Streaming Murillo
+                    </p>
+                </Link>
                 <p className="text-sm text-emerald-100">Administration</p>
             </div>
 
