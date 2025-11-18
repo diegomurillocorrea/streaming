@@ -1,814 +1,559 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
 import { createClient as createBrowserClient } from "@/utils/supabase/client";
 
 import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-    CardContent,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
-    AlertDialog,
-    AlertDialogContent,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogCancel,
-    AlertDialogAction,
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import {
-    Select,
-    SelectTrigger,
-    SelectContent,
-    SelectItem,
-    SelectValue,
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
 } from "@/components/ui/select";
 
 import { LuPlus, LuPencil, LuTrash2, LuRefreshCw } from "react-icons/lu";
 
-export default function AccountsAdminPage() {
-    const supabase = useMemo(() => createBrowserClient(), []);
+function formatDate(dateStr) {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  }).format(d);
+}
 
-    // ---------- Data ----------
-    const [accounts, setAccounts] = useState([]);
+export default function AdminAccountsPage() {
+  const [accounts, setAccounts] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [emails, setEmails] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    const [companies, setCompanies] = useState([]);
-    const [emails, setEmails] = useState([]);
-    const [cards, setCards] = useState([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-    const [loadingAccounts, setLoadingAccounts] = useState(true);
-    const [loadingRefs, setLoadingRefs] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
-    const [accountsError, setAccountsError] = useState("");
-    const [refsError, setRefsError] = useState("");
+  // formulario compartido para crear / editar
+  const [form, setForm] = useState({
+    account_name: "",
+    id_company: "",
+    id_email: "",
+    password: "",
+    payment_date: "",
+    price: "",
+  });
 
-    // ---------- Modals & form ----------
-    const [createOpen, setCreateOpen] = useState(false);
-    const [editOpen, setEditOpen] = useState(false);
-    const [deleteOpen, setDeleteOpen] = useState(false);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-    const [currentAccount, setCurrentAccount] = useState(null);
+  async function loadData() {
+    setLoading(true);
+    const supabase = createBrowserClient();
 
-    const [formAccountName, setFormAccountName] = useState("");
-    const [formCompanyId, setFormCompanyId] = useState("");
-    const [formEmailId, setFormEmailId] = useState("");
-    const [formPassword, setFormPassword] = useState("");
-    const [formCardId, setFormCardId] = useState("");
-    const [formPaymentDate, setFormPaymentDate] = useState("");
+    const [
+      { data: accountsData, error: accountsError },
+      { data: companiesData, error: companiesError },
+      { data: emailsData, error: emailsError },
+    ] = await Promise.all([
+      supabase
+        .from("accounts")
+        .select(
+          `
+          id_account,
+          id_company,
+          id_email,
+          password,
+          account_name,
+          payment_date,
+          created_at,
+          price,
+          companies (
+            company_name
+          ),
+          emails (
+            email_address
+          )
+        `
+        )
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("companies")
+        .select("id_company, company_name")
+        .order("company_name", { ascending: true }),
+      supabase
+        .from("emails")
+        .select("id_email, email_address")
+        .order("email_address", { ascending: true }),
+    ]);
 
-    const [saving, setSaving] = useState(false);
-    const [deleting, setDeleting] = useState(false);
+    if (accountsError) console.error("accounts error =>", accountsError);
+    if (companiesError) console.error("companies error =>", companiesError);
+    if (emailsError) console.error("emails error =>", emailsError);
 
-    // ---------- Loaders ----------
-    const loadReferenceData = async () => {
-        setLoadingRefs(true);
-        setRefsError("");
+    setAccounts(accountsData ?? []);
+    setCompanies(companiesData ?? []);
+    setEmails(emailsData ?? []);
+    setLoading(false);
+  }
 
-        const [
-            { data: companiesData, error: companiesErr },
-            { data: emailsData, error: emailsErr },
-            { data: cardsData, error: cardsErr },
-        ] = await Promise.all([
-            supabase
-                .from("companies")
-                .select("*")
-                .order("company_name", { ascending: true }),
-            supabase
-                .from("emails")
-                .select("*")
-                .order("email_address", { ascending: true }),
-            supabase
-                .from("cards")
-                .select("*")
-                .order("created_at", { ascending: false }),
-        ]);
+  function openCreateDialog() {
+    setEditingAccount(null);
+    setForm({
+      account_name: "",
+      id_company: "",
+      id_email: "",
+      password: "",
+      payment_date: "",
+      price: "",
+    });
+    setIsDialogOpen(true);
+  }
 
-        if (companiesErr || emailsErr || cardsErr) {
-            const firstErr = companiesErr || emailsErr || cardsErr;
-            console.error(firstErr);
-            setRefsError(firstErr.message || "Unable to load reference data.");
-        }
+  function openEditDialog(account) {
+    setEditingAccount(account);
+    setForm({
+      account_name: account.account_name ?? "",
+      id_company: account.id_company ? String(account.id_company) : "",
+      id_email: account.id_email ? String(account.id_email) : "",
+      password: account.password ?? "",
+      payment_date: account.payment_date ?? "",
+      price:
+        account.price !== null && account.price !== undefined
+          ? String(account.price)
+          : "",
+    });
+    setIsDialogOpen(true);
+  }
 
-        if (!companiesErr) setCompanies(companiesData || []);
-        if (!emailsErr) setEmails(emailsData || []);
-        if (!cardsErr) setCards(cardsData || []);
+  async function handleSave(e) {
+    e.preventDefault();
+    setSaving(true);
+    const supabase = createBrowserClient();
 
-        setLoadingRefs(false);
+    const payload = {
+      account_name: form.account_name.trim(),
+      id_company: form.id_company ? Number(form.id_company) : null,
+      id_email: form.id_email ? Number(form.id_email) : null,
+      password: form.password || "",
+      payment_date: form.payment_date || null,
+      price:
+        form.price === "" || form.price === null
+          ? null
+          : Number.parseFloat(form.price),
     };
 
-    const loadAccounts = async () => {
-        setLoadingAccounts(true);
-        setAccountsError("");
+    let error;
 
-        const { data, error } = await supabase
-            .from("accounts")
-            .select("*")
-            .order("created_at", { ascending: false });
+    if (editingAccount) {
+      const { error: updateError } = await supabase
+        .from("accounts")
+        .update(payload)
+        .eq("id_account", editingAccount.id_account);
+      error = updateError;
+    } else {
+      const { error: insertError } = await supabase
+        .from("accounts")
+        .insert(payload);
+      error = insertError;
+    }
 
-        if (error) {
-            console.error(error);
-            setAccountsError(error.message || "Unable to load accounts.");
-        } else {
-            setAccounts(data || []);
-        }
+    if (error) {
+      console.error("save account error =>", error);
+    } else {
+      setIsDialogOpen(false);
+      await loadData();
+    }
 
-        setLoadingAccounts(false);
-    };
+    setSaving(false);
+  }
 
-    useEffect(() => {
-        loadReferenceData();
-        loadAccounts();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
 
-    // ---------- Helpers ----------
-    const dbDateToInput = (value) => {
-        if (!value) return "";
-        // works for "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss"
-        return String(value).split("T")[0];
-    };
+    setDeleting(true);
+    const supabase = createBrowserClient();
 
-    const getCompanyName = (id) =>
-        companies.find((c) => c.id_company === id)?.company_name || "-";
+    const { error } = await supabase
+      .from("accounts")
+      .delete()
+      .eq("id_account", deleteTarget.id_account);
 
-    const getEmailAddress = (id) =>
-        emails.find((e) => e.id_email === id)?.email_address || "-";
+    if (error) {
+      console.error("delete account error =>", error);
+    } else {
+      setDeleteTarget(null);
+      await loadData();
+    }
 
-    const getPasswordMask = (password) => {
-        if (!password) return "-";
-        const length = Math.min(password.length, 8);
-        return "•".repeat(length || 6);
-    };
+    setDeleting(false);
+  }
 
-    const formatCardNumber = (value) => {
-        if (!value) return "";
-        const digits = String(value).replace(/\s+/g, "");
-        const last4 = digits.slice(-4);
-        return `•••• ${last4}`;
-    };
+  return (
+    <main className="min-h-screen bg-emerald-950 text-emerald-50">
+      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+        {/* HEADER */}
+        <header className="flex items-center justify-between">
+          <div>
+            <Link href="/" className="inline-block cursor-pointer">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                STREAMING MURILLO
+              </p>
+            </Link>
+            <h1 className="mt-1 text-3xl font-bold">Accounts administration</h1>
+            <p className="text-sm text-emerald-400">
+              Manage all streaming accounts (company, email, payment day and
+              price).
+            </p>
+          </div>
 
-    const getCardLabel = (id) => {
-        const card = cards.find((c) => c.id_card === id);
-        if (!card) return "-";
-        return `${card.owner_name || "Card"} – ${formatCardNumber(
-            card.card_number
-        )}`;
-    };
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="border-emerald-700 text-emerald-200 hover:bg-emerald-800"
+              onClick={loadData}
+              disabled={loading}
+              title="Refresh"
+            >
+              <LuRefreshCw className="w-4 h-4" />
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-500 text-emerald-50"
+              onClick={openCreateDialog}
+            >
+              <LuPlus className="w-4 h-4 mr-2" />
+              New account
+            </Button>
+          </div>
+        </header>
 
-    const referencesReady =
-        companies.length > 0 &&
-        emails.length > 0 &&
-        cards.length > 0 &&
-        !loadingRefs;
+        {/* TABLE */}
+        <Card className="border-emerald-800 bg-emerald-900">
+          <CardHeader>
+            <CardTitle className="text-base">Accounts</CardTitle>
+            <CardDescription>
+              All streaming accounts stored in the system.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="border-b border-emerald-800 text-emerald-50">
+                  <tr className="text-xs uppercase">
+                    <th className="py-2 pr-4">Account name</th>
+                    <th className="py-2 pr-4">Service</th>
+                    <th className="py-2 pr-4">Email</th>
+                    <th className="py-2 pr-4">Payment day</th>
+                    {/* 🆕 Columna Price */}
+                    <th className="py-2 pr-4 text-right">Price</th>
+                    <th className="py-2 pr-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="py-6 text-center text-sm text-emerald-300"
+                      >
+                        Loading accounts...
+                      </td>
+                    </tr>
+                  ) : accounts.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="py-6 text-center text-sm text-emerald-300"
+                      >
+                        No accounts yet. Click &quot;New account&quot; to add the
+                        first one.
+                      </td>
+                    </tr>
+                  ) : (
+                    accounts.map((acc) => (
+                      <tr
+                        key={acc.id_account}
+                        className="border-b border-emerald-900/60 last:border-b-0 text-emerald-50"
+                      >
+                        <td className="py-3 pr-4 align-top text-sm font-medium">
+                          {acc.account_name}
+                        </td>
+                        <td className="py-3 pr-4 align-top text-xs text-emerald-50">
+                          {acc.companies?.company_name ?? "-"}
+                        </td>
+                        <td className="py-3 pr-4 align-top text-xs text-emerald-50">
+                          {acc.emails?.email_address ?? "-"}
+                        </td>
+                        <td className="py-3 pr-4 align-top text-xs text-emerald-50">
+                          {acc.payment_date
+                            ? formatDate(acc.payment_date)
+                            : "-"}
+                        </td>
+                        {/* 🆕 celda Price */}
+                        <td className="py-3 pr-4 align-top text-xs text-right text-emerald-50">
+                          {acc.price !== null && acc.price !== undefined
+                            ? `$${acc.price.toFixed(2)}`
+                            : "-"}
+                        </td>
+                        <td className="py-3 pr-4 align-top text-xs text-right">
+                          <div className="inline-flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 border-emerald-700 text-emerald-100 hover:bg-emerald-800"
+                              onClick={() => openEditDialog(acc)}
+                            >
+                              <LuPencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 border-red-800 text-red-200 hover:bg-red-900"
+                              onClick={() => setDeleteTarget(acc)}
+                            >
+                              <LuTrash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
 
-    const resetForm = () => {
-        setFormAccountName("");
-        setFormCompanyId("");
-        setFormEmailId("");
-        setFormPassword("");
-        setFormCardId("");
-        setFormPaymentDate("");
-        setAccountsError("");
-    };
+        {/* DIALOGO CREAR / EDITAR */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="w-full max-w-2xl sm:max-w-[720px] bg-emerald-950 border-emerald-700 text-emerald-50 max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold">
+                {editingAccount ? "Edit account" : "New account"}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-emerald-300">
+                {editingAccount
+                  ? "Update the information for this streaming account."
+                  : "Create a new streaming account and set its default price."}
+              </DialogDescription>
+            </DialogHeader>
 
-    // ---------- Create ----------
-    const openCreateModal = () => {
-        setCurrentAccount(null);
-        resetForm();
-        setCreateOpen(true);
-    };
+            <form className="space-y-4" onSubmit={handleSave}>
+              <div className="space-y-2">
+                <Label htmlFor="account_name">Account name</Label>
+                <Input
+                  id="account_name"
+                  value={form.account_name}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      account_name: e.target.value,
+                    }))
+                  }
+                  className="bg-emerald-900 border-emerald-700 text-sm text-emerald-50"
+                  required
+                />
+              </div>
 
-    const handleCreate = async () => {
-        if (
-            !formAccountName.trim() ||
-            !formCompanyId ||
-            !formEmailId ||
-            !formPassword.trim() ||
-            !formCardId ||
-            !formPaymentDate
-        ) {
-            setAccountsError("All fields are required for an account.");
-            return;
-        }
-
-        setAccountsError("");
-        setSaving(true);
-
-        try {
-            const payload = {
-                account_name: formAccountName.trim(),
-                id_company: Number(formCompanyId),
-                id_email: Number(formEmailId),
-                id_card: Number(formCardId),
-                payment_date: formPaymentDate,
-                password: formPassword.trim(),
-            };
-
-            const { error: accountErr } = await supabase
-                .from("accounts")
-                .insert(payload);
-
-            if (accountErr) {
-                console.error(accountErr);
-                setAccountsError(accountErr.message || "Unable to create account.");
-                return;
-            }
-
-            await loadAccounts();
-            setCreateOpen(false);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    // ---------- Edit ----------
-    const openEditModal = (row) => {
-        setCurrentAccount(row);
-        setFormAccountName(row.account_name || "");
-        setFormCompanyId(
-            row.id_company != null ? String(row.id_company) : ""
-        );
-        setFormEmailId(row.id_email != null ? String(row.id_email) : "");
-        setFormPassword(row.password || "");
-        setFormCardId(row.id_card != null ? String(row.id_card) : "");
-        setFormPaymentDate(dbDateToInput(row.payment_date));
-        setAccountsError("");
-        setEditOpen(true);
-    };
-
-    const handleUpdate = async () => {
-        if (!currentAccount) return;
-
-        if (
-            !formAccountName.trim() ||
-            !formCompanyId ||
-            !formEmailId ||
-            !formPassword.trim() ||
-            !formCardId ||
-            !formPaymentDate
-        ) {
-            setAccountsError("All fields are required for an account.");
-            return;
-        }
-
-        setAccountsError("");
-        setSaving(true);
-
-        try {
-            const payload = {
-                account_name: formAccountName.trim(),
-                id_company: Number(formCompanyId),
-                id_email: Number(formEmailId),
-                id_card: Number(formCardId),
-                payment_date: formPaymentDate,
-                password: formPassword.trim(),
-            };
-
-            const { error } = await supabase
-                .from("accounts")
-                .update(payload)
-                .eq("id_account", currentAccount.id_account);
-
-            if (error) {
-                console.error(error);
-                setAccountsError(error.message || "Unable to update account.");
-                return;
-            }
-
-            await loadAccounts();
-            setEditOpen(false);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    // ---------- Delete ----------
-    const openDeleteModal = (row) => {
-        setCurrentAccount(row);
-        setDeleteOpen(true);
-    };
-
-    const handleDelete = async () => {
-        if (!currentAccount) return;
-
-        setDeleting(true);
-        setAccountsError("");
-
-        try {
-            const { error } = await supabase
-                .from("accounts")
-                .delete()
-                .eq("id_account", currentAccount.id_account);
-
-            if (error) {
-                console.error(error);
-                setAccountsError(error.message || "Unable to delete account.");
-                return;
-            }
-
-            setAccounts((prev) =>
-                prev.filter((item) => item.id_account !== currentAccount.id_account)
-            );
-            setDeleteOpen(false);
-        } finally {
-            setDeleting(false);
-        }
-    };
-
-    // ---------- Render ----------
-    return (
-        <main className="max-w-6xl mx-auto space-y-4">
-            <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold">Accounts</h1>
-                    <p className="text-sm text-emerald-300">
-                        Manage streaming accounts and link them to companies, emails,
-                        passwords and cards.
-                    </p>
-                    {refsError && (
-                        <p className="mt-1 text-xs text-red-400">{refsError}</p>
-                    )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Service (company)</Label>
+                  <Select
+                    value={form.id_company}
+                    onValueChange={(value) =>
+                      setForm((prev) => ({ ...prev, id_company: value }))
+                    }
+                  >
+                    <SelectTrigger className="w-full bg-emerald-900 border-emerald-700 text-sm text-emerald-50">
+                      <SelectValue placeholder="Select company" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-emerald-950 border-emerald-700 text-emerald-50">
+                      {companies.map((c) => (
+                        <SelectItem
+                          key={c.id_company}
+                          value={String(c.id_company)}
+                        >
+                          {c.company_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                <div className="flex gap-2">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="border-emerald-400/60 cursor-pointer"
-                        onClick={loadAccounts}
-                        disabled={loadingAccounts}
-                    >
-                        <LuRefreshCw
-                            className={`h-4 w-4 ${loadingAccounts ? "animate-spin" : ""
-                                }`}
-                        />
-                    </Button>
-
-                    <Button
-                        className="bg-emerald-500 hover:bg-emerald-600 cursor-pointer"
-                        onClick={openCreateModal}
-                        disabled={!referencesReady}
-                    >
-                        <LuPlus className="mr-2 h-4 w-4" />
-                        New account
-                    </Button>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Select
+                    value={form.id_email}
+                    onValueChange={(value) =>
+                      setForm((prev) => ({ ...prev, id_email: value }))
+                    }
+                  >
+                    <SelectTrigger className="w-full bg-emerald-900 border-emerald-700 text-sm text-emerald-50">
+                      <SelectValue placeholder="Select email" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-emerald-950 border-emerald-700 text-emerald-50">
+                      {emails.map((e) => (
+                        <SelectItem
+                          key={e.id_email}
+                          value={String(e.id_email)}
+                        >
+                          {e.email_address}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-            </header>
+              </div>
 
-            {accountsError && (
-                <p className="text-sm text-red-400">{accountsError}</p>
-            )}
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="text"
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, password: e.target.value }))
+                  }
+                  className="bg-emerald-900 border-emerald-700 text-sm text-emerald-50"
+                />
+              </div>
 
-            <Card className="border-emerald-800 bg-emerald-900/60">
-                <CardHeader>
-                    <CardTitle className="text-base">Accounts list</CardTitle>
-                    <CardDescription>
-                        All accounts stored in the <code>accounts</code> table.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {loadingAccounts ? (
-                        <p className="text-sm text-emerald-300">Loading accounts...</p>
-                    ) : accounts.length === 0 ? (
-                        <p className="text-sm text-emerald-300">
-                            No accounts found. Click &quot;New account&quot; to add one.
-                        </p>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm border-collapse">
-                                <thead>
-                                    <tr className="border-b border-emerald-800 text-left text-xs uppercase text-emerald-300">
-                                        <th className="py-2 pr-4">ID</th>
-                                        <th className="py-2 pr-4">Account name</th>
-                                        <th className="py-2 pr-4">Company</th>
-                                        <th className="py-2 pr-4">Email</th>
-                                        <th className="py-2 pr-4">Password</th>
-                                        <th className="py-2 pr-4">Card</th>
-                                        <th className="py-2 pr-4">Payment date</th>
-                                        <th className="py-2 pr-4">Created at</th>
-                                        <th className="py-2 pr-4 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {accounts.map((row) => (
-                                        <tr
-                                            key={row.id_account}
-                                            className="border-b border-emerald-900/60 last:border-b-0"
-                                        >
-                                            <td className="py-2 pr-4 align-middle text-emerald-100">
-                                                {row.id_account}
-                                            </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-50">
-                                                {row.account_name}
-                                            </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
-                                                {getCompanyName(row.id_company)}
-                                            </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
-                                                {getEmailAddress(row.id_email)}
-                                            </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
-                                                {getPasswordMask(row.password)}
-                                            </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
-                                                {getCardLabel(row.id_card)}
-                                            </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
-                                                {row.payment_date
-                                                    ? dbDateToInput(row.payment_date)
-                                                    : "-"}
-                                            </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
-                                                {row.created_at
-                                                    ? new Date(
-                                                        row.created_at
-                                                    ).toLocaleString()
-                                                    : "-"}
-                                            </td>
-                                            <td className="py-2 pr-0 align-middle">
-                                                <div className="flex justify-end gap-2">
-                                                    <Button
-                                                        size="icon"
-                                                        variant="outline"
-                                                        className="border-emerald-400/60 cursor-pointer"
-                                                        onClick={() => openEditModal(row)}
-                                                    >
-                                                        <LuPencil className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        size="icon"
-                                                        variant="outline"
-                                                        className="border-red-500/60 text-red-400 hover:bg-red-500 hover:text-white cursor-pointer"
-                                                        onClick={() =>
-                                                            openDeleteModal(row)
-                                                        }
-                                                    >
-                                                        <LuTrash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* ---------- Create modal ---------- */}
-            <Dialog
-                open={createOpen}
-                onOpenChange={(open) => {
-                    setCreateOpen(open);
-                    if (!open) {
-                        resetForm();
-                        setCurrentAccount(null);
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="payment_date">Payment day</Label>
+                  <Input
+                    id="payment_date"
+                    type="date"
+                    value={form.payment_date || ""}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        payment_date: e.target.value,
+                      }))
                     }
-                }}
-            >
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
-                    <DialogHeader>
-                        <DialogTitle>New account</DialogTitle>
-                        <DialogDescription>
-                            Link an account to a company, email, password and card.
-                        </DialogDescription>
-                    </DialogHeader>
+                    className="bg-emerald-900 border-emerald-700 text-sm text-emerald-50"
+                  />
+                </div>
 
-                    <div className="space-y-3 py-2">
-                        <div className="space-y-1">
-                            <Label htmlFor="new-account-name">Account name</Label>
-                            <Input
-                                id="new-account-name"
-                                type="text"
-                                placeholder="e.g. Netflix main"
-                                value={formAccountName}
-                                onChange={(e) =>
-                                    setFormAccountName(e.target.value)
-                                }
-                                disabled={saving}
-                            />
-                        </div>
+                {/* 🆕 Campo PRICE */}
+                <div className="space-y-2">
+                  <Label htmlFor="price">Price</Label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm text-emerald-200">$</span>
+                    <Input
+                      id="price"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={form.price}
+                      onChange={(e) =>
+                        setForm((prev) => ({ ...prev, price: e.target.value }))
+                      }
+                      className="bg-emerald-900 border-emerald-700 text-sm text-emerald-50"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
 
-                        <div className="space-y-1">
-                            <Label>Company</Label>
-                            <Select
-                                value={formCompanyId}
-                                onValueChange={setFormCompanyId}
-                                disabled={saving || loadingRefs}
-                            >
-                                <SelectTrigger className="w-full bg-emerald-900 border-emerald-700">
-                                    <SelectValue placeholder="Select a company" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-emerald-950 border-emerald-700 text-white">
-                                    {companies.map((c) => (
-                                        <SelectItem
-                                            key={c.id_company}
-                                            value={String(c.id_company)}
-                                        >
-                                            {c.company_name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
+              <DialogFooter className="mt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-emerald-700 text-emerald-100 hover:bg-emerald-800"
+                  onClick={() => setIsDialogOpen(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-emerald-50"
+                  disabled={saving}
+                >
+                  {saving
+                    ? editingAccount
+                      ? "Saving..."
+                      : "Creating..."
+                    : editingAccount
+                    ? "Save changes"
+                    : "Create account"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-                        <div className="space-y-1">
-                            <Label>Email</Label>
-                            <Select
-                                value={formEmailId}
-                                onValueChange={setFormEmailId}
-                                disabled={saving || loadingRefs}
-                            >
-                                <SelectTrigger className="w-full bg-emerald-900 border-emerald-700">
-                                    <SelectValue placeholder="Select an email" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-emerald-950 border-emerald-700 text-white">
-                                    {emails.map((e) => (
-                                        <SelectItem
-                                            key={e.id_email}
-                                            value={String(e.id_email)}
-                                        >
-                                            {e.email_address}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label htmlFor="new-account-password">Password</Label>
-                            <Input
-                                id="new-account-password"
-                                type="text" // cámbialo a "password" si quieres ocultarlo
-                                placeholder="Type the password for this account"
-                                value={formPassword}
-                                onChange={(e) =>
-                                    setFormPassword(e.target.value)
-                                }
-                                disabled={saving}
-                            />
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label>Card</Label>
-                            <Select
-                                value={formCardId}
-                                onValueChange={setFormCardId}
-                                disabled={saving || loadingRefs}
-                            >
-                                <SelectTrigger className="w-full bg-emerald-900 border-emerald-700">
-                                    <SelectValue placeholder="Select a card" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-emerald-950 border-emerald-700 text-white">
-                                    {cards.map((card) => (
-                                        <SelectItem
-                                            key={card.id_card}
-                                            value={String(card.id_card)}
-                                        >
-                                            {`${card.owner_name || "Card"} – ${formatCardNumber(
-                                                card.card_number
-                                            )}`}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label htmlFor="new-payment-date">Payment date</Label>
-                            <Input
-                                id="new-payment-date"
-                                type="date"
-                                value={formPaymentDate}
-                                onChange={(e) =>
-                                    setFormPaymentDate(e.target.value)
-                                }
-                                disabled={saving}
-                            />
-                        </div>
-
-                        {accountsError && (
-                            <p className="text-sm text-red-400">{accountsError}</p>
-                        )}
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setCreateOpen(false)}
-                            disabled={saving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleCreate}
-                            disabled={saving}
-                            className="bg-emerald-500 hover:bg-emerald-600"
-                        >
-                            {saving ? "Saving..." : "Create"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* ---------- Edit modal ---------- */}
-            <Dialog
-                open={editOpen}
-                onOpenChange={(open) => {
-                    setEditOpen(open);
-                    if (!open) {
-                        resetForm();
-                        setCurrentAccount(null);
-                    }
-                }}
-            >
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
-                    <DialogHeader>
-                        <DialogTitle>Edit account</DialogTitle>
-                        <DialogDescription>
-                            Update the selected account links and settings.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-3 py-2">
-                        <div className="space-y-1">
-                            <Label htmlFor="edit-account-name">Account name</Label>
-                            <Input
-                                id="edit-account-name"
-                                type="text"
-                                value={formAccountName}
-                                onChange={(e) =>
-                                    setFormAccountName(e.target.value)
-                                }
-                                disabled={saving}
-                            />
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label>Company</Label>
-                            <Select
-                                value={formCompanyId}
-                                onValueChange={setFormCompanyId}
-                                disabled={saving || loadingRefs}
-                            >
-                                <SelectTrigger className="w-full bg-emerald-900 border-emerald-700">
-                                    <SelectValue placeholder="Select a company" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-emerald-950 border-emerald-700">
-                                    {companies.map((c) => (
-                                        <SelectItem
-                                            key={c.id_company}
-                                            value={String(c.id_company)}
-                                        >
-                                            {c.company_name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label>Email</Label>
-                            <Select
-                                value={formEmailId}
-                                onValueChange={setFormEmailId}
-                                disabled={saving || loadingRefs}
-                            >
-                                <SelectTrigger className="w-full bg-emerald-900 border-emerald-700">
-                                    <SelectValue placeholder="Select an email" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-emerald-950 border-emerald-700">
-                                    {emails.map((e) => (
-                                        <SelectItem
-                                            key={e.id_email}
-                                            value={String(e.id_email)}
-                                        >
-                                            {e.email_address}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label htmlFor="edit-account-password">Password</Label>
-                            <Input
-                                id="edit-account-password"
-                                type="text"
-                                value={formPassword}
-                                onChange={(e) =>
-                                    setFormPassword(e.target.value)
-                                }
-                                disabled={saving}
-                            />
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label>Card</Label>
-                            <Select
-                                value={formCardId}
-                                onValueChange={setFormCardId}
-                                disabled={saving || loadingRefs}
-                            >
-                                <SelectTrigger className="w-full bg-emerald-900 border-emerald-700">
-                                    <SelectValue placeholder="Select a card" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-emerald-950 border-emerald-700">
-                                    {cards.map((card) => (
-                                        <SelectItem
-                                            key={card.id_card}
-                                            value={String(card.id_card)}
-                                        >
-                                            {`${card.owner_name || "Card"} – ${formatCardNumber(
-                                                card.card_number
-                                            )}`}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label htmlFor="edit-payment-date">Payment date</Label>
-                            <Input
-                                id="edit-payment-date"
-                                type="date"
-                                value={formPaymentDate}
-                                onChange={(e) =>
-                                    setFormPaymentDate(e.target.value)
-                                }
-                                disabled={saving}
-                            />
-                        </div>
-
-                        {accountsError && (
-                            <p className="text-sm text-red-400">{accountsError}</p>
-                        )}
-                    </div>
-
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setEditOpen(false)}
-                            disabled={saving}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleUpdate}
-                            disabled={saving}
-                            className="bg-emerald-500 hover:bg-emerald-600"
-                        >
-                            {saving ? "Saving..." : "Save changes"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* ---------- Delete modal ---------- */}
-            <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <AlertDialogContent className="bg-emerald-950 border-emerald-800 text-white">
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete account</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to delete{" "}
-                            <span className="font-mono text-emerald-200">
-                                {currentAccount?.account_name}
-                            </span>
-                            ? This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={deleting}>
-                            Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDelete}
-                            disabled={deleting}
-                            className="bg-red-600 hover:bg-red-700"
-                        >
-                            {deleting ? "Deleting..." : "Delete"}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </main>
-    );
+        {/* MODAL ELIMINAR */}
+        <AlertDialog
+          open={!!deleteTarget}
+          onOpenChange={(open) => {
+            if (!open) setDeleteTarget(null);
+          }}
+        >
+          <AlertDialogContent className="bg-emerald-950 border-emerald-700 text-emerald-50">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete account</AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-emerald-300">
+                This will permanently remove the account{" "}
+                <span className="font-semibold">
+                  {deleteTarget?.account_name}
+                </span>{" "}
+                and its configuration. Subscriptions linked to this account
+                won&apos;t be deleted automatically.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                className="border-emerald-700 text-emerald-100 hover:bg-emerald-800"
+                disabled={deleting}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-700 hover:bg-red-600 text-red-50"
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </main>
+  );
 }

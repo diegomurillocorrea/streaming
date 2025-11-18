@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LuMail, LuBuilding2, LuCreditCard, LuUsers, LuWallet, LuLayoutDashboard, LuUsersRound } from "react-icons/lu";
+import { LuMail, LuBuilding2, LuCreditCard, LuUsers, LuWallet, LuLayoutDashboard, LuMonitorPlay } from "react-icons/lu";
 
 const navItems = [
     {
@@ -38,7 +38,7 @@ const navItems = [
     {
         label: "Accounts",
         href: "/administration/accounts",
-        icon: LuUsersRound,
+        icon: LuMonitorPlay,
     },
 ];
 
