@@ -53,16 +53,14 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-emerald-400 px-4">
-            <Card className="w-full max-w-md bg-white">
-                <CardHeader>
-                    <CardTitle className="text-3xl text-center">
-                        Streaming Murillo
-                    </CardTitle>
-                    <CardTitle className="text-2xl text-center">Log In</CardTitle>
+        <div className="min-h-screen flex items-center justify-center bg-emerald-950 text-emerald px-4">
+            <Card className="w-full max-w-md bg-emerald-900 ">
+                <CardHeader className="text-white">
+                    <CardTitle className="text-3xl text-center">Streaming Murillo</CardTitle>
+                    <CardTitle className="text-3xl text-center">Log In</CardTitle>
                 </CardHeader>
 
-                <CardContent>
+                <CardContent className="text-white">
                     <form className="space-y-4" onSubmit={handleLogin}>
                         <div className="space-y-2">
                             <Label htmlFor="email">Email</Label>
@@ -94,7 +92,7 @@ export default function LoginPage() {
                                     variant="outline"
                                     disabled={loading}
                                     onClick={() => setShowPass((v) => !v)}
-                                    className="whitespace-nowrap cursor-pointer hover:bg-black hover:text-white duration-300"
+                                    className="whitespace-nowrap cursor-pointer border-emerald-400/60 hover:bg-black hover:border-black hover:text-white duration-300"
                                 >
                                     {showPass ? <LuEye /> : <LuEyeClosed />}
                                 </Button>
@@ -108,7 +106,7 @@ export default function LoginPage() {
                         <Button
                             type="submit"
                             disabled={loading}
-                            className="w-full border border-black cursor-pointer hover:bg-black hover:text-white duration-300"
+                            className="w-full border border-emerald-400/60 cursor-pointer hover:bg-black hover:text-white hover:border-black duration-300"
                         >
                             {loading ? "Logging in..." : "Log In"}
                         </Button>

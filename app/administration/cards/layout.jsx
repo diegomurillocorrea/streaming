@@ -1,8 +1,8 @@
 export const metadata = {
-    title: "Login | Streaming Murillo App",
+    title: "Cards | Streaming Murillo App",
 };
 
-export default function LoginLayout({ children }) {
+export default function CardsLayout({ children }) {
     return (
         <>
             {children}
