@@ -145,39 +145,71 @@ export function SubscriptionRow({ index, row, bankAccounts, accountPrice }) {
     };
 
     // --------- GUARDAR EN payments ----------
-    const persistPayment = async () => {
-        if (!paymentAmount && !bankAccountId) return;
+    const persistPayment = async (override = {}) => {
+        // Usamos los valores más recientes (los que vienen del handler si los manda)
+        const effectiveAmount =
+            override.paymentAmount !== undefined
+                ? override.paymentAmount
+                : paymentAmount;
+
+        const effectiveBankId =
+            override.bankAccountId !== undefined
+                ? override.bankAccountId
+                : bankAccountId;
+
+        const hasAmount =
+            effectiveAmount !== "" && effectiveAmount !== null && effectiveAmount !== undefined;
+        const hasBank =
+            effectiveBankId !== "" && effectiveBankId !== null && effectiveBankId !== undefined;
+
+        // Si no hay nada que guardar, no pegamos al backend
+        if (!hasAmount && !hasBank) return;
+
+        const parsedAmount = hasAmount ? Number(effectiveAmount) : 0;
+        // si viene vacío o NaN, lo dejamos en 0
+        const amountNum = Number.isNaN(parsedAmount) ? 0 : parsedAmount;
+        const bankIdNum = hasBank ? Number(effectiveBankId) : null;
 
         setSavingPayment(true);
         try {
-            const amountNum = paymentAmount ? Number(paymentAmount) : null;
-            const bankIdNum = bankAccountId ? Number(bankAccountId) : null;
-
             if (row.lastPaymentId) {
+                // UPDATE de un pago existente
+                const updateData = {};
+
+                // amount siempre es un número (puede ser 0)
+                updateData.amount = amountNum;
+
+                if (bankIdNum !== null) {
+                    updateData.id_bank_account = bankIdNum;
+                }
+
                 const { error } = await supabase
                     .from("payments")
-                    .update({
-                        amount: amountNum,
-                        id_bank_account: bankIdNum,
-                    })
+                    .update(updateData)
                     .eq("id_payment", row.lastPaymentId);
 
                 if (error) {
                     console.error("update payment error", error);
                 }
             } else {
+                // INSERT de un pago nuevo
                 const now = new Date();
                 const paidMonth = new Date(now.getFullYear(), now.getMonth(), 1)
                     .toISOString()
                     .slice(0, 10);
 
-                const { error } = await supabase.from("payments").insert({
+                const insertData = {
                     id_subscription: row.id_subscription,
-                    id_bank_account: bankIdNum,
-                    amount: amountNum,
+                    amount: amountNum, // si no pusiste nada, será 0
                     payment_date: now.toISOString(),
                     paid_month: paidMonth,
-                });
+                };
+
+                if (bankIdNum !== null) {
+                    insertData.id_bank_account = bankIdNum;
+                }
+
+                const { error } = await supabase.from("payments").insert(insertData);
 
                 if (error) {
                     console.error("insert payment error", error);
@@ -210,11 +242,14 @@ export function SubscriptionRow({ index, row, bankAccounts, accountPrice }) {
 
     const handleBankChange = async (value) => {
         setBankAccountId(value);
-        await persistPayment();
+        // Forzamos a persistPayment a usar el banco recién seleccionado
+        await persistPayment({ bankAccountId: value });
     };
 
-    const handlePaymentBlur = async () => {
-        await persistPayment();
+    const handlePaymentBlur = async (e) => {
+        const value = e.target.value;
+        // Ya se actualizó en onChange, pero se lo pasamos igual para evitar estados viejos
+        await persistPayment({ paymentAmount: value });
     };
 
     const handleSubscriptionBlur = async () => {
@@ -335,8 +370,8 @@ export function SubscriptionRow({ index, row, bankAccounts, accountPrice }) {
             <td className="py-3 pr-4 align-top text-center">
                 <span
                     className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold ${isPaid
-                            ? "bg-emerald-700 text-emerald-50"
-                            : "bg-amber-700 text-amber-50"
+                        ? "bg-emerald-700 text-emerald-50"
+                        : "bg-amber-700 text-amber-50"
                         }`}
                 >
                     {paymentStatusLabel}
