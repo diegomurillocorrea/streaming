@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LuLogOut } from "react-icons/lu";
-import { createClient as createBrowserClient } from "@/utils/supabase/client";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 export default function LogoutButton() {
     const router = useRouter();

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import { usePathname } from "next/navigation"
 import { LuSun } from "react-icons/lu"
 
-import { createClient as createBrowserClient } from "@/utils/supabase/client"
+import { createClient as createBrowserClient } from "@/lib/supabase/client"
 import LogoutButton from "@/components/interface/LogoutButton"
 
 const navItems = [
