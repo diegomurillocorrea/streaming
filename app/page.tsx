@@ -10,7 +10,7 @@ import {
 
 interface PaymentRow {
   id_payment: number
-  amount: number | nullnpm 
+  amount: number | null
   payment_date: string | null
   paid_month: string | null
 }
