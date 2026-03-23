@@ -1,2 +1,13 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
+
+html {
+  font-family: "Poppins", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+    Arial, sans-serif;
+}
+
+body {
+  background: #1f2430;
+  color: #f1f5f9;
+}
