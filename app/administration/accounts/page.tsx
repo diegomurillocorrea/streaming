@@ -44,6 +44,7 @@ import { LuPlus, LuPencil, LuTrash2, LuRefreshCw } from "react-icons/lu";
 
 import { TableScrollArea } from "@/components/admin/table-scroll-area";
 import { TableSearchInput } from "@/components/admin/table-search-input";
+import { canAccessAccountSubscriptionsPage } from "@/lib/account-subscriptions-access";
 import { rowMatchesSearch } from "@/lib/table-search";
 
 function formatDate(dateStr) {
@@ -362,13 +363,23 @@ export default function AdminAccountsPage() {
                       </td>
                       <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                         {acc.id_account != null && acc.account_name ? (
-                          <Link
-                            href={`/administration/subscriptions/${acc.id_account}`}
-                            className="font-medium text-emerald-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-emerald-300 dark:focus-visible:outline-emerald-400"
-                            aria-label={`Ver clientes y pagos de la cuenta ${acc.account_name}`}
-                          >
-                            {acc.account_name}
-                          </Link>
+                          canAccessAccountSubscriptionsPage(acc) ? (
+                            <Link
+                              href={`/administration/subscriptions/${acc.id_account}`}
+                              className="font-medium text-emerald-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-emerald-300 dark:focus-visible:outline-emerald-400"
+                              aria-label={`Ver clientes y pagos de la cuenta ${acc.account_name}`}
+                            >
+                              {acc.account_name}
+                            </Link>
+                          ) : (
+                            <span
+                              className="font-medium text-zinc-600 dark:text-emerald-200/90"
+                              title="Configura día de pago y precio en esta cuenta para abrir suscripciones"
+                              aria-label={`${acc.account_name}: completa día de pago y precio para ver suscripciones`}
+                            >
+                              {acc.account_name}
+                            </span>
+                          )
                         ) : (
                           acc.account_name || "-"
                         )}

@@ -16,11 +16,9 @@ import {
   Link2,
 } from "lucide-react"
 
-import { ReportsPanel } from "@/components/interface/ReportsPanel"
 import { Button } from "@/components/ui/button"
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -305,26 +303,6 @@ export default function AdministrationDashboardPage() {
             )
           )}
         </div>
-      </section>
-
-      <section aria-labelledby="reports-heading" className="space-y-4">
-        <div>
-          <h2
-            id="reports-heading"
-            className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
-          >
-            Reportes (PDF)
-          </h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Genera reportes mensuales y descargas en PDF.
-          </p>
-        </div>
-
-        <Card className="border-zinc-200/80 dark:border-zinc-800">
-          <CardContent className="pt-6">
-            <ReportsPanel />
-          </CardContent>
-        </Card>
       </section>
     </div>
   )

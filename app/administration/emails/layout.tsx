@@ -1,5 +1,5 @@
 export const metadata = {
-    title: "Correos | DAIEGO Streaming",
+    title: "Correos",
 };
 
 export default function EmailsLayout({ children }) {

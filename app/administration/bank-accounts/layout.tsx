@@ -1,5 +1,5 @@
 export const metadata = {
-    title: "Cuentas bancarias | DAIEGO Streaming",
+    title: "Cuentas bancarias",
 };
 
 export default function BankAccountsLayout({ children }) {

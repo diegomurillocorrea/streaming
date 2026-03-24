@@ -1,5 +1,5 @@
 export const metadata = {
-    title: "Tarjetas | DAIEGO Streaming",
+    title: "Tarjetas",
 };
 
 export default function CardsLayout({ children }) {

@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { createClient as createServerClient } from "@/utils/supabase/server"
 import {
@@ -8,7 +9,9 @@ import {
   CardContent,
 } from "@/components/ui/card"
 import { FinishMonthButton } from "@/components/interface/FinishMonthButton"
+import { CopyAccountCredentialsButton } from "@/components/interface/copy-account-credentials-button"
 import { AccountSubscriptionsTable } from "@/components/admin/account-subscriptions-table"
+import { accountLacksPaymentDayAndPrice } from "@/lib/account-subscriptions-access"
 import {
   getCurrentMonthKey,
   monthKeyFromDateOnly,
@@ -16,6 +19,42 @@ import {
 
 interface AccountSubscriptionsPageProps {
   params: Promise<{ id: string }>
+}
+
+export async function generateMetadata({
+  params,
+}: AccountSubscriptionsPageProps): Promise<Metadata> {
+  const routeParams = await params
+  const rawAccountId = routeParams?.id
+
+  if (!rawAccountId) {
+    return { title: "Suscripciones" }
+  }
+
+  const accountId = Number(rawAccountId)
+  if (Number.isNaN(accountId)) {
+    return { title: "Cuenta inválida" }
+  }
+
+  const supabase = await createServerClient()
+  const { data, error } = await supabase
+    .from("accounts")
+    .select("account_name, payment_date, price")
+    .eq("id_account", accountId)
+    .maybeSingle()
+
+  if (error || !data) {
+    return { title: "Cuenta no encontrada" }
+  }
+
+  if (accountLacksPaymentDayAndPrice(data)) {
+    return { title: "Día de pago y precio requeridos" }
+  }
+
+  const accountLabel =
+    data.account_name?.trim() || `Cuenta ${accountId}`
+
+  return { title: accountLabel }
 }
 
 function formatHeaderDate(dateStr: string | null | undefined) {
@@ -155,6 +194,7 @@ export default async function AccountSubscriptionsPage({
         `
         id_account,
         account_name,
+        password,
         payment_date,
         price,
         pin_included,
@@ -196,6 +236,36 @@ export default async function AccountSubscriptionsPage({
     )
   }
 
+  if (accountLacksPaymentDayAndPrice(accountData)) {
+    const label =
+      accountData.account_name?.trim() || `Cuenta ${accountId}`
+    return (
+      <main className="mx-auto max-w-lg space-y-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-emerald-300">
+          Suscripciones
+        </p>
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-emerald-50">
+          Completa la cuenta para continuar
+        </h1>
+        <p className="text-sm text-zinc-600 dark:text-emerald-300">
+          La cuenta{" "}
+          <span className="font-medium text-zinc-900 dark:text-emerald-100">
+            {label}
+          </span>{" "}
+          no tiene día de pago ni precio. Configura ambos en{" "}
+          <strong className="font-semibold">Cuentas</strong> para gestionar
+          suscripciones y pagos.
+        </p>
+        <Link
+          href="/administration/accounts"
+          className="inline-flex text-sm font-medium text-emerald-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-emerald-300 dark:focus-visible:outline-emerald-400"
+        >
+          Ir a Cuentas
+        </Link>
+      </main>
+    )
+  }
+
   if (subscriptionsError) {
     console.error("subscriptions query error =>", subscriptionsError)
     return (
@@ -220,6 +290,7 @@ export default async function AccountSubscriptionsPage({
   const accountName = accountInfo?.account_name ?? `Cuenta ${accountId}`
   const serviceName = accountCompany?.company_name ?? "-"
   const accountEmail = accountEmailInfo?.email_address ?? "-"
+  const accountPassword = accountInfo?.password ?? ""
   const accountPaymentDay = accountInfo?.payment_date ?? null
   const accountPrice =
     accountInfo?.price !== null && accountInfo?.price !== undefined
@@ -270,6 +341,10 @@ export default async function AccountSubscriptionsPage({
 
     return {
       id_subscription: sub.id_subscription,
+      id_client:
+        typeof sub.id_client === "number" && !Number.isNaN(sub.id_client)
+          ? sub.id_client
+          : null,
       user: sub.user ?? "",
       pin: sub.pin ?? "",
       firstName: client?.name ?? "",
@@ -317,10 +392,20 @@ export default async function AccountSubscriptionsPage({
             </p>
             <p>
               <span className="text-zinc-500 dark:text-emerald-400">Correo de la cuenta:</span>{" "}
-              <span className="font-medium text-zinc-900 dark:text-emerald-50">
+              <span className="font-medium break-all text-zinc-900 dark:text-emerald-50">
                 {accountEmail}
               </span>
             </p>
+            <p>
+              <span className="text-zinc-500 dark:text-emerald-400">Contraseña:</span>{" "}
+              <span className="font-mono text-sm font-medium break-all text-zinc-900 dark:text-emerald-50">
+                {accountPassword.trim() !== "" ? accountPassword : "—"}
+              </span>
+            </p>
+            <CopyAccountCredentialsButton
+              email={accountEmail}
+              password={accountPassword}
+            />
             {accountPaymentDay && (
               <p className="text-xs">
                 <span className="text-zinc-500 dark:text-emerald-400">Día de pago:</span>{" "}
@@ -405,17 +490,4 @@ export default async function AccountSubscriptionsPage({
       </Card>
     </main>
   )
-}
-
-export async function generateMetadata({
-  params,
-}: AccountSubscriptionsPageProps) {
-  const routeParams = await params
-  const rawId = routeParams?.id
-  const idNum = rawId ? Number(rawId) : NaN
-  const title =
-    !rawId || Number.isNaN(idNum)
-      ? "Suscripciones"
-      : `Cuenta ${rawId}`
-  return { title }
 }

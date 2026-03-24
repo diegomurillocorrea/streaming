@@ -10,6 +10,8 @@ import { rowMatchesSearch } from "@/lib/table-search"
 
 export type SubscriptionTableRow = {
   id_subscription: number
+  /** Para enlazar a Clientes y abrir el modal de edición */
+  id_client: number | null
   user: string
   pin: string
   firstName: string

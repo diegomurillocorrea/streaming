@@ -1,5 +1,5 @@
 export const metadata = {
-    title: "Cuentas | DAIEGO Streaming",
+    title: "Cuentas",
 };
 
 export default function AccountsLayout({ children }) {

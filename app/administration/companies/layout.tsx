@@ -1,5 +1,5 @@
 export const metadata = {
-    title: "Empresas | DAIEGO Streaming",
+    title: "Empresas",
 };
 
 export default function CompaniesLayout({ children }) {

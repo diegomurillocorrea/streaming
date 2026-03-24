@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createClient as createBrowserClient } from "@/lib/supabase/client"
 import { Input } from "@/components/ui/input"
@@ -363,6 +364,14 @@ export function SubscriptionRow({
 
   const isBusy = savingSubscription || savingPayment
 
+  const clientEditHref =
+    row.id_client != null
+      ? `/administration/clients?edit=${row.id_client}`
+      : null
+
+  const clientEditLabel =
+    `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "Cliente"
+
   return (
     <tr className="border-b border-zinc-100 text-zinc-900 last:border-b-0 dark:border-emerald-900/60 dark:text-emerald-50">
       <td className="w-8 min-w-8 max-w-8 px-2 py-3.5 align-top text-center text-xs tabular-nums">
@@ -370,15 +379,43 @@ export function SubscriptionRow({
       </td>
 
       <td className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5 align-top text-xs">
-        <span className="block min-w-0 truncate font-medium" title={row.firstName || undefined}>
-          {row.firstName || "-"}
-        </span>
+        {clientEditHref ? (
+          <Link
+            href={clientEditHref}
+            className="block min-w-0 truncate font-medium text-emerald-700 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:text-emerald-200"
+            title={row.firstName || undefined}
+            aria-label={`Abrir edición de cliente: ${clientEditLabel} (nombre)`}
+          >
+            {row.firstName || "-"}
+          </Link>
+        ) : (
+          <span
+            className="block min-w-0 truncate font-medium"
+            title={row.firstName || undefined}
+          >
+            {row.firstName || "-"}
+          </span>
+        )}
       </td>
 
       <td className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5 align-top text-xs">
-        <span className="block min-w-0 truncate" title={row.lastName || undefined}>
-          {row.lastName || "-"}
-        </span>
+        {clientEditHref ? (
+          <Link
+            href={clientEditHref}
+            className="block min-w-0 truncate text-emerald-700 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:text-emerald-200"
+            title={row.lastName || undefined}
+            aria-label={`Abrir edición de cliente: ${clientEditLabel} (apellido)`}
+          >
+            {row.lastName || "-"}
+          </Link>
+        ) : (
+          <span
+            className="block min-w-0 truncate"
+            title={row.lastName || undefined}
+          >
+            {row.lastName || "-"}
+          </span>
+        )}
       </td>
 
       <td className="w-[6.5rem] min-w-[6.5rem] max-w-[6.5rem] px-2 py-3.5 align-top">

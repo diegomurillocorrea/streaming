@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 import {
@@ -40,7 +41,11 @@ import { TableScrollArea } from "@/components/admin/table-scroll-area";
 import { TableSearchInput } from "@/components/admin/table-search-input";
 import { rowMatchesSearch } from "@/lib/table-search";
 
-export default function ClientsAdminPage() {
+function ClientsAdminPageContent() {
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const consumedEditParamRef = useRef(false);
+
     const supabase = useMemo(() => createBrowserClient(), []);
 
     const [clients, setClients] = useState([]);
@@ -104,6 +109,38 @@ export default function ClientsAdminPage() {
         loadClients();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => {
+        if (loading) return;
+
+        const raw = searchParams.get("edit");
+        if (!raw) {
+            consumedEditParamRef.current = false;
+            return;
+        }
+
+        if (consumedEditParamRef.current) return;
+
+        const id = Number(raw);
+        if (Number.isNaN(id)) {
+            router.replace("/administration/clients", { scroll: false });
+            return;
+        }
+
+        const row = clients.find((c) => c.id_client === id);
+        router.replace("/administration/clients", { scroll: false });
+        consumedEditParamRef.current = true;
+
+        if (!row) return;
+
+        setCurrentClient(row);
+        setFormName(row.name || "");
+        setFormLastName(row.lastName || "");
+        setFormEmail(row.email || "");
+        setFormPhoneNumber(row.phoneNumber || "");
+        setGlobalError("");
+        setEditOpen(true);
+    }, [loading, clients, searchParams, router]);
 
     // ------- Helpers -------
     const resetForm = () => {
@@ -578,5 +615,21 @@ export default function ClientsAdminPage() {
                 </AlertDialogContent>
             </AlertDialog>
         </main>
+    );
+}
+
+export default function ClientsAdminPage() {
+    return (
+        <Suspense
+            fallback={
+                <main className="mx-auto space-y-4 p-4">
+                    <p className="text-sm text-zinc-600 dark:text-emerald-300">
+                        Cargando clientes…
+                    </p>
+                </main>
+            }
+        >
+            <ClientsAdminPageContent />
+        </Suspense>
     );
 }

@@ -1,5 +1,5 @@
 export const metadata = {
-    title: "Clientes | DAIEGO Streaming",
+    title: "Clientes",
 };
 
 export default function ClientsLayout({ children }) {
