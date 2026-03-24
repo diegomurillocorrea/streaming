@@ -46,8 +46,12 @@ type AccountSubscriptionsTableProps = {
   rows: SubscriptionTableRow[]
   emptySlots: number
   clientsList: ClientOption[]
+  /** Clientes ya vinculados a esta cuenta (no se ofrecen en &quot;Agregar cliente&quot;) */
+  linkedClientIds: number[]
   bankAccounts: BankAccountOption[]
   accountPrice: number | null
+  /** Viene de `accounts.pin_included`: mostrar columna PIN */
+  pinIncluded: boolean
 }
 
 export function AccountSubscriptionsTable({
@@ -55,10 +59,14 @@ export function AccountSubscriptionsTable({
   rows,
   emptySlots,
   clientsList,
+  linkedClientIds,
   bankAccounts,
   accountPrice,
+  pinIncluded,
 }: AccountSubscriptionsTableProps) {
   const [searchQuery, setSearchQuery] = useState("")
+
+  const columnCount = pinIncluded ? 13 : 12
 
   const filteredRows = useMemo(() => {
     if (!searchQuery.trim()) return rows
@@ -92,20 +100,26 @@ export function AccountSubscriptionsTable({
         aria-label="Buscar en la tabla de suscripciones"
       />
       <TableScrollArea>
-        <table className="w-full min-w-max border-collapse text-left text-sm">
+        <table className="w-full border-collapse text-left text-sm min-w-[max(100%,max-content)]">
           <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
             <tr className="text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-200">
-              <th className="py-3.5 px-4">No. cliente</th>
-              <th className="py-3.5 px-4">Nombre</th>
-              <th className="py-3.5 px-4">Apellido</th>
-              <th className="py-3.5 px-4">User</th>
-              <th className="py-3.5 px-4">PIN</th>
+              <th className="w-8 min-w-8 max-w-8 px-2 py-3.5 text-center">#</th>
+              <th className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5">
+                Nombre
+              </th>
+              <th className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5">
+                Apellido
+              </th>
+              <th className="w-[6.5rem] min-w-[6.5rem] max-w-[6.5rem] px-2 py-3.5">User</th>
+              {pinIncluded && (
+                <th className="py-3.5 px-4">PIN</th>
+              )}
               <th className="py-3.5 px-4">Teléfono</th>
               <th className="py-3.5 px-4">Inicio de servicio</th>
               <th className="py-3.5 px-4 text-center">Período en meses</th>
               <th className="py-3.5 px-4">Próximo pago</th>
               <th className="py-3.5 px-4">Método de pago</th>
-              <th className="py-3.5 px-4">Pago</th>
+              <th className="w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] px-2 py-3.5">Pago</th>
               <th className="py-3.5 px-4 text-center">Estado de pago</th>
               <th className="py-3.5 px-4 text-center">Acciones</th>
             </tr>
@@ -118,6 +132,7 @@ export function AccountSubscriptionsTable({
                 row={row}
                 bankAccounts={bankAccounts ?? []}
                 accountPrice={accountPrice}
+                showPinColumn={pinIncluded}
               />
             ))}
             {showEmptySlots &&
@@ -126,23 +141,33 @@ export function AccountSubscriptionsTable({
                   key={`empty-${index}`}
                   className="border-b border-zinc-100 text-zinc-900 last:border-b-0 dark:border-emerald-900/60 dark:text-emerald-50"
                 >
-                  <td className="py-3.5 px-4 align-top text-xs">-</td>
-                  <td className="py-3.5 px-4 align-top text-xs">
+                  <td className="w-8 min-w-8 max-w-8 px-2 py-3.5 align-top text-center text-xs">
+                    -
+                  </td>
+                  <td className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5 align-top text-xs">
                     <AddClientButton
                       accountId={accountId}
                       clients={clientsList ?? []}
+                      linkedClientIds={linkedClientIds}
                     />
                   </td>
-                  <td className="py-3.5 px-4 align-top text-xs">-</td>
-                  <td className="py-3.5 px-4 align-top text-xs">-</td>
-                  <td className="py-3.5 px-4 align-top text-xs">-</td>
+                  <td className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5 align-top text-xs">
+                    -
+                  </td>
+                  <td className="w-[6.5rem] min-w-[6.5rem] max-w-[6.5rem] px-2 py-3.5 align-top text-xs">
+                    -
+                  </td>
+                  {pinIncluded && (
+                    <td className="py-3.5 px-4 align-top text-xs">-</td>
+                  )}
                   <td className="py-3.5 px-4 align-top text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-center text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-xs">-</td>
-                  <td className="py-3.5 px-4 align-top text-xs">-</td>
-                  <td className="py-3.5 px-4 align-top text-xs">-</td>
+                  <td className="w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] px-2 py-3.5 align-top text-xs">
+                    -
+                  </td>
                   <td className="py-3.5 px-4 align-top text-center text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-center text-xs">-</td>
                 </tr>
@@ -150,7 +175,7 @@ export function AccountSubscriptionsTable({
             {!showEmptySlots && searchQuery.trim() && filteredRows.length === 0 && (
               <tr>
                 <td
-                  colSpan={13}
+                  colSpan={columnCount}
                   className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
                 >
                   No hay resultados para &quot;{searchQuery.trim()}&quot;.

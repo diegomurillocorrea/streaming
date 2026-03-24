@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 import {
@@ -70,6 +71,13 @@ export default function AdminAccountsPage() {
 
   const [tableSearch, setTableSearch] = useState("");
 
+  /** Evita mismatch de hidratación SSR/cliente en el botón Actualizar (disabled vs loading). */
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   const filteredAccounts = useMemo(() => {
     if (!tableSearch.trim()) return accounts;
     return accounts.filter((acc) => {
@@ -103,6 +111,7 @@ export default function AdminAccountsPage() {
     password: "",
     payment_date: "",
     price: "",
+    pin_included: true,
   });
 
   const loadData = useCallback(async () => {
@@ -126,6 +135,7 @@ export default function AdminAccountsPage() {
           payment_date,
           created_at,
           price,
+          pin_included,
           companies (
             company_name
           ),
@@ -172,6 +182,7 @@ export default function AdminAccountsPage() {
       password: "",
       payment_date: "",
       price: "",
+      pin_included: true,
     });
     setIsDialogOpen(true);
   }
@@ -188,6 +199,10 @@ export default function AdminAccountsPage() {
         account.price !== null && account.price !== undefined
           ? String(account.price)
           : "",
+      pin_included:
+        account.pin_included === null || account.pin_included === undefined
+          ? true
+          : Boolean(account.pin_included),
     });
     setIsDialogOpen(true);
   }
@@ -207,6 +222,7 @@ export default function AdminAccountsPage() {
         form.price === "" || form.price === null
           ? null
           : Number.parseFloat(form.price),
+      pin_included: Boolean(form.pin_included),
     };
 
     let error;
@@ -271,10 +287,12 @@ export default function AdminAccountsPage() {
             size="icon"
             className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
             onClick={loadData}
-            disabled={loading}
+            disabled={hasMounted && loading}
             title="Actualizar"
           >
-            <LuRefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <LuRefreshCw
+              className={`h-4 w-4 ${hasMounted && loading ? "animate-spin" : ""}`}
+            />
           </Button>
           <Button
             className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
@@ -343,7 +361,17 @@ export default function AdminAccountsPage() {
                         {acc.id_account ?? "-"}
                       </td>
                       <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
-                        {acc.account_name || "-"}
+                        {acc.id_account != null && acc.account_name ? (
+                          <Link
+                            href={`/administration/subscriptions/${acc.id_account}`}
+                            className="font-medium text-emerald-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-emerald-300 dark:focus-visible:outline-emerald-400"
+                            aria-label={`Ver clientes y pagos de la cuenta ${acc.account_name}`}
+                          >
+                            {acc.account_name}
+                          </Link>
+                        ) : (
+                          acc.account_name || "-"
+                        )}
                       </td>
                       <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                         {(Array.isArray(acc.companies)
@@ -482,6 +510,37 @@ export default function AdminAccountsPage() {
                 />
               </div>
 
+              <div className="flex items-start gap-3 rounded-lg border border-zinc-200 px-3 py-3 dark:border-emerald-800">
+                <input
+                  id="pin_included"
+                  type="checkbox"
+                  checked={form.pin_included}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      pin_included: e.target.checked,
+                    }))
+                  }
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 dark:border-emerald-600 dark:bg-emerald-950"
+                  aria-describedby="pin_included_desc"
+                />
+                <div className="space-y-0.5">
+                  <Label
+                    htmlFor="pin_included"
+                    className="cursor-pointer text-sm font-medium leading-snug"
+                  >
+                    Mostrar columna PIN (suscripciones)
+                  </Label>
+                  <p
+                    id="pin_included_desc"
+                    className="text-xs text-zinc-500 dark:text-emerald-400"
+                  >
+                    Si está activo, en la vista de clientes por cuenta se muestra la columna
+                    para el PIN de cada suscripción.
+                  </p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="payment_date">Día de pago</Label>
@@ -512,7 +571,7 @@ export default function AdminAccountsPage() {
                       onChange={(e) =>
                         setForm((prev) => ({ ...prev, price: e.target.value }))
                       }
-                      className="border-zinc-200 bg-white text-sm text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700"
+                      className="border-zinc-200 bg-white text-sm text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700 dark:text-emerald-50"
                       placeholder="0.00"
                     />
                   </div>

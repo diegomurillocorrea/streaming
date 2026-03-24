@@ -175,7 +175,7 @@ export default function AdministrationDashboardPage() {
   }, [loadStats])
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex flex-col gap-8">
       <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
