@@ -156,17 +156,17 @@ export function FinishMonthButton({ accountId }) {
         <>
             <Button
                 size="sm"
-                className="bg-emerald-600 hover:bg-emerald-500 cursor-pointer"
+                className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
                 onClick={() => setOpen(true)}
             >
                 Cerrar mes
             </Button>
 
             <AlertDialog open={open} onOpenChange={setOpen}>
-                <AlertDialogContent className="bg-emerald-950 border-emerald-800 text-emerald-50">
+                <AlertDialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-50">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Cerrar mes actual</AlertDialogTitle>
-                        <AlertDialogDescription className="text-xs text-emerald-300">
+                        <AlertDialogDescription className="text-xs text-zinc-600 dark:text-emerald-300">
                             Esto moverá todas las suscripciones de esta cuenta al siguiente
                             período. La{" "}
                             <span className="font-semibold">fecha de inicio del servicio</span>{" "}
@@ -185,7 +185,7 @@ export function FinishMonthButton({ accountId }) {
                             Cancelar
                         </AlertDialogCancel>
                         <AlertDialogAction
-                            className="bg-emerald-600 hover:bg-emerald-500 cursor-pointer"
+                            className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
                             onClick={handleFinishMonth}
                             disabled={loading}
                         >

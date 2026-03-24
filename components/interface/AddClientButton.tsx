@@ -53,29 +53,29 @@ export function AddClientButton({ accountId, clients }) {
             <Button
                 size="sm"
                 variant="outline"
-                className="border-emerald-400/60 text-xs cursor-pointer"
+                className="cursor-pointer border-zinc-300 text-xs hover:bg-zinc-50 dark:border-emerald-400/60"
                 onClick={() => setOpen(true)}
             >
                 Agregar cliente
             </Button>
 
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-emerald-50">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-50">
                     <DialogHeader>
                         <DialogTitle className="text-base">
                             Agregar cliente a esta cuenta
                         </DialogTitle>
-                        <DialogDescription className="text-xs text-emerald-300">
+                        <DialogDescription className="text-xs text-zinc-600 dark:text-emerald-300">
                             Selecciona un cliente existente para vincularlo a esta cuenta.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="mt-4 space-y-2">
-                        <label className="text-xs text-emerald-300">
+                        <label className="text-xs text-zinc-600 dark:text-emerald-300">
                             Elegir cliente
                         </label>
                         <select
-                            className="w-full rounded-md border border-emerald-800 bg-emerald-900 p-2 text-sm outline-none focus:ring-1 focus:ring-emerald-500"
+                            className="w-full rounded-md border border-zinc-200 bg-white p-2 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-emerald-800 dark:bg-emerald-900 dark:text-emerald-50"
                             value={selectedClientId ?? ""}
                             onChange={(e) =>
                                 setSelectedClientId(
@@ -104,7 +104,7 @@ export function AddClientButton({ accountId, clients }) {
                         </Button>
                         <Button
                             size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-500 cursor-pointer"
+                            className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
                             onClick={handleCreate}
                             disabled={loading || !selectedClientId}
                         >

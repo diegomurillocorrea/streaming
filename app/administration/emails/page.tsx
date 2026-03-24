@@ -41,6 +41,10 @@ import {
     LuRefreshCw,
 } from "react-icons/lu";
 
+import { TableScrollArea } from "@/components/admin/table-scroll-area";
+import { TableSearchInput } from "@/components/admin/table-search-input";
+import { rowMatchesSearch } from "@/lib/table-search";
+
 export default function EmailsAdminPage() {
     const supabase = useMemo(() => createBrowserClient(), []);
 
@@ -57,6 +61,18 @@ export default function EmailsAdminPage() {
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
+    const [tableSearch, setTableSearch] = useState("");
+
+    const filteredEmails = useMemo(() => {
+        if (!tableSearch.trim()) return emails;
+        return emails.filter((row) =>
+            rowMatchesSearch(
+                [row.id_email, row.email_address, row.created_at],
+                tableSearch
+            )
+        );
+    }, [emails, tableSearch]);
+
     // Load data
     const loadEmails = async () => {
         setLoading(true);
@@ -65,7 +81,7 @@ export default function EmailsAdminPage() {
         const { data, error } = await supabase
             .from("emails")
             .select("*")
-            .order("created_at", { ascending: false });
+            .order("id_email", { ascending: true });
 
         if (error) {
             console.error(error);
@@ -189,11 +205,11 @@ export default function EmailsAdminPage() {
     };
 
     return (
-        <main className="max-w-5xl mx-auto space-y-4">
+        <main className="mx-auto space-y-4">
             <header className="flex items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold">Correos</h1>
-                    <p className="text-sm text-emerald-300">
+                    <p className="text-sm text-zinc-600 dark:text-emerald-300">
                         Administra todos los correos usados en tu sistema.
                     </p>
                 </div>
@@ -202,7 +218,7 @@ export default function EmailsAdminPage() {
                     <Button
                         variant="outline"
                         size="icon"
-                        className="border-emerald-400/60 cursor-pointer"
+                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                         onClick={loadEmails}
                         disabled={loading}
                     >
@@ -210,7 +226,7 @@ export default function EmailsAdminPage() {
                     </Button>
 
                     <Button
-                        className="bg-emerald-500 hover:bg-emerald-600 cursor-pointer"
+                        className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
                         onClick={openCreateModal}
                     >
                         <LuPlus className="mr-2 h-4 w-4" />
@@ -220,57 +236,86 @@ export default function EmailsAdminPage() {
             </header>
 
             {globalError && (
-                <p className="text-sm text-red-400">{globalError}</p>
+                <p className="text-sm text-red-600 dark:text-red-400">{globalError}</p>
             )}
 
-            <Card className="border-emerald-800 bg-emerald-900/60">
+            <Card className="border border-zinc-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-emerald-900/60">
                 <CardHeader>
                     <CardTitle className="text-base">Lista de correos</CardTitle>
                     <CardDescription>
                         All email addresses stored in the <code>emails</code> table.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <p className="text-sm text-emerald-300">Cargando correos...</p>
-                    ) : emails.length === 0 ? (
-                        <p className="text-sm text-emerald-300">
-                            No se encontraron correos. Haz clic en &quot;Nuevo correo&quot; para agregar uno.
-                        </p>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm border-collapse">
-                                <thead>
-                                    <tr className="border-b border-emerald-800 text-left text-xs uppercase text-emerald-300">
-                                        <th className="py-2 pr-4">ID</th>
-                                        <th className="py-2 pr-4">Correo</th>
-                                        <th className="py-2 pr-4">Creado el</th>
-                                        <th className="py-2 pr-4 text-right">Acciones</th>
+                <CardContent className="space-y-3">
+                    <TableSearchInput
+                        id="emails-table-search"
+                        value={tableSearch}
+                        onChange={setTableSearch}
+                        placeholder="Buscar por ID o dirección de correo…"
+                        aria-label="Buscar en la lista de correos"
+                    />
+                    <TableScrollArea>
+                        <table className="w-full min-w-max border-collapse text-sm">
+                            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
+                                <tr className="text-left text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-300">
+                                    <th className="py-3.5 px-4">ID</th>
+                                    <th className="py-3.5 px-4">Correo</th>
+                                    <th className="py-3.5 px-4">Creado el</th>
+                                    <th className="py-3.5 px-4 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading ? (
+                                    <tr>
+                                        <td
+                                            colSpan={4}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            Cargando correos...
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {emails.map((row) => (
+                                ) : emails.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={4}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            No se encontraron correos. Haz clic en &quot;Nuevo
+                                            correo&quot; para agregar uno.
+                                        </td>
+                                    </tr>
+                                ) : filteredEmails.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={4}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            No hay resultados para &quot;{tableSearch.trim()}&quot;.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredEmails.map((row) => (
                                         <tr
                                             key={row.id_email}
-                                            className="border-b border-emerald-900/60 last:border-b-0"
+                                            className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
                                         >
-                                            <td className="py-2 pr-4 align-middle text-emerald-100">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-700 dark:text-emerald-100">
                                                 {row.id_email}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-50">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                 {row.email_address}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {row.created_at
                                                     ? new Date(row.created_at).toLocaleString()
                                                     : "-"}
                                             </td>
-                                            <td className="py-2 pr-0 align-middle">
+                                            <td className="py-3.5 px-4 align-middle">
                                                 <div className="flex justify-end gap-2">
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="border-emerald-400/60 cursor-pointer"
+                                                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                                                         onClick={() => openEditModal(row)}
                                                     >
                                                         <LuPencil className="h-4 w-4" />
@@ -278,7 +323,7 @@ export default function EmailsAdminPage() {
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="border-red-500/60 text-red-400 hover:bg-red-500 hover:text-white cursor-pointer"
+                                                        className="cursor-pointer border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-400 dark:hover:bg-red-500 dark:hover:text-white"
                                                         onClick={() => openDeleteModal(row)}
                                                     >
                                                         <LuTrash2 className="h-4 w-4" />
@@ -286,17 +331,17 @@ export default function EmailsAdminPage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </TableScrollArea>
                 </CardContent>
             </Card>
 
             {/* Create modal */}
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <DialogHeader>
                         <DialogTitle>Nuevo correo</DialogTitle>
                         <DialogDescription>
@@ -329,7 +374,7 @@ export default function EmailsAdminPage() {
                         <Button
                             onClick={handleCreate}
                             disabled={saving}
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                         >
                             {saving ? "Guardando..." : "Crear"}
                         </Button>
@@ -339,7 +384,7 @@ export default function EmailsAdminPage() {
 
             {/* Edit modal */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <DialogHeader>
                         <DialogTitle>Editar correo</DialogTitle>
                         <DialogDescription>
@@ -371,7 +416,7 @@ export default function EmailsAdminPage() {
                         <Button
                             onClick={handleUpdate}
                             disabled={saving}
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                         >
                             {saving ? "Guardando..." : "Guardar cambios"}
                         </Button>
@@ -381,12 +426,12 @@ export default function EmailsAdminPage() {
 
             {/* Delete modal */}
             <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <AlertDialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <AlertDialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Eliminar correo</AlertDialogTitle>
                         <AlertDialogDescription>
                             ¿Seguro que deseas eliminar{" "}
-                            <span className="font-mono text-emerald-200">
+                            <span className="font-mono text-zinc-700 dark:text-emerald-200">
                                 {currentEmail?.email_address}
                             </span>
                             ? Esta acción no se puede deshacer.

@@ -1,13 +1,106 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Light: blanco, bordes zinc suaves, verde esmeralda como acento (referencia DAIEGO Receipts).
+   Dark: se conserva la estética esmeralda / zinc actual. */
+
+@theme inline {
+  --font-sans: var(--font-poppins);
+  --font-mono: var(--font-geist-mono);
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 96rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@variant dark (&:where(.dark, .dark *)) {
+}
+
+:root {
+  color-scheme: light dark;
+  --radius: 0.75rem;
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(240 10% 6%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(240 10% 6%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(240 10% 6%);
+  --primary: hsl(160 84% 32%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(240 5% 96%);
+  --secondary-foreground: hsl(240 6% 12%);
+  --muted: hsl(240 5% 96%);
+  --muted-foreground: hsl(240 4% 46%);
+  --accent: hsl(152 65% 95%);
+  --accent-foreground: hsl(160 84% 22%);
+  --destructive: hsl(0 72% 51%);
+  --border: hsl(240 6% 90%);
+  --input: hsl(240 6% 90%);
+  --ring: hsl(160 84% 32%);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --background: hsl(240 10% 4%);
+  --foreground: hsl(0 0% 98%);
+  --card: hsl(240 10% 6%);
+  --card-foreground: hsl(0 0% 98%);
+  --popover: hsl(240 10% 6%);
+  --popover-foreground: hsl(0 0% 98%);
+  --primary: hsl(152 82% 39%);
+  --primary-foreground: hsl(152 40% 10%);
+  --secondary: hsl(240 4% 16%);
+  --secondary-foreground: hsl(0 0% 98%);
+  --muted: hsl(240 4% 16%);
+  --muted-foreground: hsl(240 5% 65%);
+  --accent: hsl(240 4% 16%);
+  --accent-foreground: hsl(0 0% 98%);
+  --destructive: hsl(0 63% 41%);
+  --border: hsl(240 4% 18%);
+  --input: hsl(240 4% 18%);
+  --ring: hsl(152 82% 39%);
+}
+
+:root.light {
+  color-scheme: light;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 html {
-  font-family: "Poppins", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
-    Arial, sans-serif;
+  scroll-behavior: smooth;
 }
 
 body {
-  background: #1f2430;
-  color: #f1f5f9;
+  font-family: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+.focus-ring {
+  @apply outline-none ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900;
 }

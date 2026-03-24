@@ -36,11 +36,16 @@ import {
 
 import { LuPlus, LuPencil, LuTrash2, LuRefreshCw } from "react-icons/lu";
 
+import { TableScrollArea } from "@/components/admin/table-scroll-area";
+import { TableSearchInput } from "@/components/admin/table-search-input";
+import { rowMatchesSearch } from "@/lib/table-search";
+
 export default function BankAccountsAdminPage() {
     const supabase = useMemo(() => createBrowserClient(), []);
 
     const [accounts, setAccounts] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
     const [globalError, setGlobalError] = useState("");
 
     const [createOpen, setCreateOpen] = useState(false);
@@ -56,6 +61,24 @@ export default function BankAccountsAdminPage() {
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
+    const [tableSearch, setTableSearch] = useState("");
+
+    const filteredBankAccounts = useMemo(() => {
+        if (!tableSearch.trim()) return accounts;
+        return accounts.filter((row) =>
+            rowMatchesSearch(
+                [
+                    row.id_bank_account,
+                    row.account_name,
+                    row.bank_name,
+                    row.account_number,
+                    row.created_at,
+                ],
+                tableSearch
+            )
+        );
+    }, [accounts, tableSearch]);
+
     // ---------- Load data ----------
     const loadAccounts = async () => {
         setLoading(true);
@@ -64,7 +87,7 @@ export default function BankAccountsAdminPage() {
         const { data, error } = await supabase
             .from("bank_accounts")
             .select("*")
-            .order("created_at", { ascending: false });
+            .order("id_bank_account", { ascending: true });
 
         if (error) {
             console.error(error);
@@ -74,6 +97,7 @@ export default function BankAccountsAdminPage() {
         }
 
         setLoading(false);
+        setHasLoadedOnce(true);
     };
 
     useEffect(() => {
@@ -218,12 +242,15 @@ export default function BankAccountsAdminPage() {
     };
 
     // ---------- Render ----------
+    const isInitialLoading = !hasLoadedOnce;
+    const isTableLoading = isInitialLoading || loading;
+
     return (
-        <main className="max-w-5xl mx-auto space-y-4">
+        <main className="mx-auto space-y-4">
             <header className="flex items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold">Cuentas bancarias</h1>
-                    <p className="text-sm text-emerald-300">
+                    <p className="text-sm text-zinc-600 dark:text-emerald-300">
                         Administra las cuentas bancarias usadas en tu negocio.
                     </p>
                 </div>
@@ -232,17 +259,17 @@ export default function BankAccountsAdminPage() {
                     <Button
                         variant="outline"
                         size="icon"
-                        className="border-emerald-400/60 cursor-pointer"
+                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                         onClick={loadAccounts}
-                        disabled={loading}
+                        disabled={isTableLoading}
                     >
                         <LuRefreshCw
-                            className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                            className={`h-4 w-4 ${isTableLoading ? "animate-spin" : ""}`}
                         />
                     </Button>
 
                     <Button
-                        className="bg-emerald-500 hover:bg-emerald-600 cursor-pointer"
+                        className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
                         onClick={openCreateModal}
                     >
                         <LuPlus className="mr-2 h-4 w-4" />
@@ -252,65 +279,94 @@ export default function BankAccountsAdminPage() {
             </header>
 
             {globalError && (
-                <p className="text-sm text-red-400">{globalError}</p>
+                <p className="text-sm text-red-600 dark:text-red-400">{globalError}</p>
             )}
 
-            <Card className="border-emerald-800 bg-emerald-900/60">
+            <Card className="border border-zinc-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-emerald-900/60">
                 <CardHeader>
                     <CardTitle className="text-base">Lista de cuentas bancarias</CardTitle>
                     <CardDescription>
                         All bank accounts stored in the <code>bank_accounts</code> table.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <p className="text-sm text-emerald-300">Cargando cuentas bancarias...</p>
-                    ) : accounts.length === 0 ? (
-                        <p className="text-sm text-emerald-300">
-                            No se encontraron cuentas bancarias. Haz clic en &quot;Nueva cuenta bancaria&quot; para agregar una.
-                        </p>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm border-collapse">
-                                <thead>
-                                    <tr className="border-b border-emerald-800 text-left text-xs uppercase text-emerald-300">
-                                        <th className="py-2 pr-4">ID</th>
-                                        <th className="py-2 pr-4">Nombre de cuenta</th>
-                                        <th className="py-2 pr-4">Banco</th>
-                                        <th className="py-2 pr-4">Número de cuenta</th>
-                                        <th className="py-2 pr-4">Creado el</th>
-                                        <th className="py-2 pr-4 text-right">Acciones</th>
+                <CardContent className="space-y-3">
+                    <TableSearchInput
+                        id="bank-accounts-table-search"
+                        value={tableSearch}
+                        onChange={setTableSearch}
+                        placeholder="Buscar por nombre, banco o número de cuenta…"
+                        aria-label="Buscar en la lista de cuentas bancarias"
+                    />
+                    <TableScrollArea>
+                        <table className="w-full min-w-max border-collapse text-sm">
+                            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
+                                <tr className="text-left text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-300">
+                                    <th className="py-3.5 px-4">ID</th>
+                                    <th className="py-3.5 px-4">Nombre de cuenta</th>
+                                    <th className="py-3.5 px-4">Banco</th>
+                                    <th className="py-3.5 px-4">Número de cuenta</th>
+                                    <th className="py-3.5 px-4">Creado el</th>
+                                    <th className="py-3.5 px-4 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {isTableLoading ? (
+                                    <tr>
+                                        <td
+                                            colSpan={6}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            Cargando cuentas bancarias...
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {accounts.map((row) => (
+                                ) : accounts.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={6}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            No se encontraron cuentas bancarias. Haz clic en
+                                            &quot;Nueva cuenta bancaria&quot; para agregar una.
+                                        </td>
+                                    </tr>
+                                ) : filteredBankAccounts.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={6}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            No hay resultados para &quot;{tableSearch.trim()}&quot;.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredBankAccounts.map((row) => (
                                         <tr
                                             key={row.id_bank_account}
-                                            className="border-b border-emerald-900/60 last:border-b-0"
+                                            className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
                                         >
-                                            <td className="py-2 pr-4 align-middle text-emerald-100">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-700 dark:text-emerald-100">
                                                 {row.id_bank_account}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-50">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                 {row.account_name}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-50">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                 {row.bank_name}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {formatAccountNumber(row.account_number)}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {row.created_at
                                                     ? new Date(row.created_at).toLocaleString()
                                                     : "-"}
                                             </td>
-                                            <td className="py-2 pr-0 align-middle">
+                                            <td className="py-3.5 px-4 align-middle">
                                                 <div className="flex justify-end gap-2">
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="border-emerald-400/60 cursor-pointer"
+                                                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                                                         onClick={() => openEditModal(row)}
                                                     >
                                                         <LuPencil className="h-4 w-4" />
@@ -318,7 +374,7 @@ export default function BankAccountsAdminPage() {
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="border-red-500/60 text-red-400 hover:bg-red-500 hover:text-white cursor-pointer"
+                                                        className="cursor-pointer border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-400 dark:hover:bg-red-500 dark:hover:text-white"
                                                         onClick={() => openDeleteModal(row)}
                                                     >
                                                         <LuTrash2 className="h-4 w-4" />
@@ -326,17 +382,17 @@ export default function BankAccountsAdminPage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </TableScrollArea>
                 </CardContent>
             </Card>
 
             {/* ---------- Create modal ---------- */}
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <DialogHeader>
                         <DialogTitle>Nueva cuenta bancaria</DialogTitle>
                         <DialogDescription>
@@ -382,7 +438,7 @@ export default function BankAccountsAdminPage() {
                         </div>
 
                         {globalError && (
-                            <p className="text-sm text-red-400">{globalError}</p>
+                            <p className="text-sm text-red-600 dark:text-red-400">{globalError}</p>
                         )}
                     </div>
 
@@ -397,7 +453,7 @@ export default function BankAccountsAdminPage() {
                         <Button
                             onClick={handleCreate}
                             disabled={saving}
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                         >
                             {saving ? "Guardando..." : "Crear"}
                         </Button>
@@ -407,7 +463,7 @@ export default function BankAccountsAdminPage() {
 
             {/* ---------- Edit modal ---------- */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <DialogHeader>
                         <DialogTitle>Editar cuenta bancaria</DialogTitle>
                         <DialogDescription>
@@ -450,7 +506,7 @@ export default function BankAccountsAdminPage() {
                         </div>
 
                         {globalError && (
-                            <p className="text-sm text-red-400">{globalError}</p>
+                            <p className="text-sm text-red-600 dark:text-red-400">{globalError}</p>
                         )}
                     </div>
 
@@ -465,7 +521,7 @@ export default function BankAccountsAdminPage() {
                         <Button
                             onClick={handleUpdate}
                             disabled={saving}
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                         >
                             {saving ? "Guardando..." : "Guardar cambios"}
                         </Button>
@@ -475,12 +531,12 @@ export default function BankAccountsAdminPage() {
 
             {/* ---------- Delete modal ---------- */}
             <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <AlertDialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <AlertDialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Eliminar cuenta bancaria</AlertDialogTitle>
                         <AlertDialogDescription>
                             ¿Seguro que deseas eliminar{" "}
-                            <span className="font-mono text-emerald-200">
+                            <span className="font-mono text-zinc-700 dark:text-emerald-200">
                                 {currentAccount?.account_name}
                             </span>
                             ? Esta acción no se puede deshacer.

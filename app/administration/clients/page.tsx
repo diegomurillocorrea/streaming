@@ -36,6 +36,10 @@ import {
 
 import { LuPlus, LuPencil, LuTrash2, LuRefreshCw } from "react-icons/lu";
 
+import { TableScrollArea } from "@/components/admin/table-scroll-area";
+import { TableSearchInput } from "@/components/admin/table-search-input";
+import { rowMatchesSearch } from "@/lib/table-search";
+
 export default function ClientsAdminPage() {
     const supabase = useMemo(() => createBrowserClient(), []);
 
@@ -57,6 +61,25 @@ export default function ClientsAdminPage() {
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
+    const [tableSearch, setTableSearch] = useState("");
+
+    const filteredClients = useMemo(() => {
+        if (!tableSearch.trim()) return clients;
+        return clients.filter((row) =>
+            rowMatchesSearch(
+                [
+                    row.id_client,
+                    row.name,
+                    row.lastName,
+                    row.email,
+                    row.phoneNumber,
+                    row.created_at,
+                ],
+                tableSearch
+            )
+        );
+    }, [clients, tableSearch]);
+
     // ------- Load data -------
     const loadClients = async () => {
         setLoading(true);
@@ -65,7 +88,7 @@ export default function ClientsAdminPage() {
         const { data, error } = await supabase
             .from("clients")
             .select("*")
-            .order("created_at", { ascending: false });
+            .order("id_client", { ascending: true });
 
         if (error) {
             console.error(error);
@@ -217,11 +240,11 @@ export default function ClientsAdminPage() {
 
     // ------- Render -------
     return (
-        <main className="max-w-5xl mx-auto space-y-4">
+        <main className="mx-auto space-y-4">
             <header className="flex items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold">Clientes</h1>
-                    <p className="text-sm text-emerald-300">
+                    <p className="text-sm text-zinc-600 dark:text-emerald-300">
                         Administra los clientes que usan tus servicios de streaming.
                     </p>
                 </div>
@@ -230,7 +253,7 @@ export default function ClientsAdminPage() {
                     <Button
                         variant="outline"
                         size="icon"
-                        className="border-emerald-400/60 cursor-pointer"
+                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                         onClick={loadClients}
                         disabled={loading}
                     >
@@ -240,7 +263,7 @@ export default function ClientsAdminPage() {
                     </Button>
 
                     <Button
-                        className="bg-emerald-500 hover:bg-emerald-600 cursor-pointer"
+                        className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
                         onClick={openCreateModal}
                     >
                         <LuPlus className="mr-2 h-4 w-4" />
@@ -250,69 +273,98 @@ export default function ClientsAdminPage() {
             </header>
 
             {globalError && (
-                <p className="text-sm text-red-400">{globalError}</p>
+                <p className="text-sm text-red-600 dark:text-red-400">{globalError}</p>
             )}
 
-            <Card className="border-emerald-800 bg-emerald-900/60">
+            <Card className="border border-zinc-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-emerald-900/60">
                 <CardHeader>
                     <CardTitle className="text-base">Lista de clientes</CardTitle>
                     <CardDescription>
                         Todos los clientes guardados en la tabla <code>clients</code>.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <p className="text-sm text-emerald-300">Cargando clientes...</p>
-                    ) : clients.length === 0 ? (
-                        <p className="text-sm text-emerald-300">
-                            No se encontraron clientes. Haz clic en &quot;Nuevo cliente&quot; para agregar uno.
-                        </p>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm border-collapse">
-                                <thead>
-                                    <tr className="border-b border-emerald-800 text-left text-xs uppercase text-emerald-300">
-                                        <th className="py-2 pr-4">ID</th>
-                                        <th className="py-2 pr-4">Nombre</th>
-                                        <th className="py-2 pr-4">Apellido</th>
-                                        <th className="py-2 pr-4">Email</th>
-                                        <th className="py-2 pr-4">Teléfono</th>
-                                        <th className="py-2 pr-4">Creado el</th>
-                                        <th className="py-2 pr-4 text-right">Acciones</th>
+                <CardContent className="space-y-3">
+                    <TableSearchInput
+                        id="clients-table-search"
+                        value={tableSearch}
+                        onChange={setTableSearch}
+                        placeholder="Buscar por nombre, apellido, email o teléfono…"
+                        aria-label="Buscar en la lista de clientes"
+                    />
+                    <TableScrollArea>
+                        <table className="w-full min-w-max border-collapse text-sm">
+                            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
+                                <tr className="text-left text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-300">
+                                    <th className="py-3.5 px-4">ID</th>
+                                    <th className="py-3.5 px-4">Nombre</th>
+                                    <th className="py-3.5 px-4">Apellido</th>
+                                    <th className="py-3.5 px-4">Email</th>
+                                    <th className="py-3.5 px-4">Teléfono</th>
+                                    <th className="py-3.5 px-4">Creado el</th>
+                                    <th className="py-3.5 px-4 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading ? (
+                                    <tr>
+                                        <td
+                                            colSpan={7}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            Cargando clientes...
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {clients.map((row) => (
+                                ) : clients.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={7}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            No se encontraron clientes. Haz clic en &quot;Nuevo
+                                            cliente&quot; para agregar uno.
+                                        </td>
+                                    </tr>
+                                ) : filteredClients.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={7}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            No hay resultados para &quot;{tableSearch.trim()}&quot;.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredClients.map((row) => (
                                         <tr
                                             key={row.id_client}
-                                            className="border-b border-emerald-900/60 last:border-b-0"
+                                            className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
                                         >
-                                            <td className="py-2 pr-4 align-middle text-emerald-100">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-700 dark:text-emerald-100">
                                                 {row.id_client}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-50">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                 {row.name}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-50">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                 {row.lastName}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {row.email || "-"}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {row.phoneNumber || "-"}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {row.created_at
                                                     ? new Date(row.created_at).toLocaleString()
                                                     : "-"}
                                             </td>
-                                            <td className="py-2 pr-0 align-middle">
+                                            <td className="py-3.5 px-4 align-middle">
                                                 <div className="flex justify-end gap-2">
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="border-emerald-400/60 cursor-pointer"
+                                                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                                                         onClick={() => openEditModal(row)}
                                                     >
                                                         <LuPencil className="h-4 w-4" />
@@ -320,7 +372,7 @@ export default function ClientsAdminPage() {
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="border-red-500/60 text-red-400 hover:bg-red-500 hover:text-white cursor-pointer"
+                                                        className="cursor-pointer border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-400 dark:hover:bg-red-500 dark:hover:text-white"
                                                         onClick={() => openDeleteModal(row)}
                                                     >
                                                         <LuTrash2 className="h-4 w-4" />
@@ -328,17 +380,17 @@ export default function ClientsAdminPage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </TableScrollArea>
                 </CardContent>
             </Card>
 
             {/* Create modal */}
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <DialogHeader>
                         <DialogTitle>Nuevo cliente</DialogTitle>
                         <DialogDescription>
@@ -396,7 +448,7 @@ export default function ClientsAdminPage() {
                         </div>
 
                         {globalError && (
-                            <p className="text-sm text-red-400">{globalError}</p>
+                            <p className="text-sm text-red-600 dark:text-red-400">{globalError}</p>
                         )}
                     </div>
 
@@ -411,7 +463,7 @@ export default function ClientsAdminPage() {
                         <Button
                             onClick={handleCreate}
                             disabled={saving}
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                         >
                             {saving ? "Guardando..." : "Crear"}
                         </Button>
@@ -421,7 +473,7 @@ export default function ClientsAdminPage() {
 
             {/* Edit modal */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <DialogHeader>
                         <DialogTitle>Editar cliente</DialogTitle>
                         <DialogDescription>
@@ -475,7 +527,7 @@ export default function ClientsAdminPage() {
                         </div>
 
                         {globalError && (
-                            <p className="text-sm text-red-400">{globalError}</p>
+                            <p className="text-sm text-red-600 dark:text-red-400">{globalError}</p>
                         )}
                     </div>
 
@@ -490,7 +542,7 @@ export default function ClientsAdminPage() {
                         <Button
                             onClick={handleUpdate}
                             disabled={saving}
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                         >
                             {saving ? "Guardando..." : "Guardar cambios"}
                         </Button>
@@ -500,12 +552,12 @@ export default function ClientsAdminPage() {
 
             {/* Delete modal */}
             <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <AlertDialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <AlertDialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Eliminar cliente</AlertDialogTitle>
                         <AlertDialogDescription>
                             ¿Seguro que deseas eliminar a{" "}
-                            <span className="font-mono text-emerald-200">
+                            <span className="font-mono text-zinc-700 dark:text-emerald-200">
                                 {currentClient?.name} {currentClient?.lastName}
                             </span>
                             ? Esta acción no se puede deshacer.

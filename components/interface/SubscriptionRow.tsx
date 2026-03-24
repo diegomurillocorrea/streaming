@@ -258,34 +258,34 @@ export function SubscriptionRow({ index, row, bankAccounts, accountPrice }) {
     };
 
     return (
-        <tr className="border-b border-emerald-900/60 last:border-b-0 text-emerald-50">
+        <tr className="border-b border-zinc-100 text-zinc-900 last:border-b-0 dark:border-emerald-900/60 dark:text-emerald-50">
             {/* No. Client */}
-            <td className="py-3 pr-4 align-top text-xs">{index + 1}</td>
+            <td className="py-3.5 px-4 align-top text-xs">{index + 1}</td>
 
             {/* Name */}
-            <td className="py-3 pr-4 align-top text-xs">
+            <td className="py-3.5 px-4 align-top text-xs">
                 <span className="font-medium">{row.firstName || "-"}</span>
             </td>
 
             {/* Last Name */}
-            <td className="py-3 pr-4 align-top text-xs">
+            <td className="py-3.5 px-4 align-top text-xs">
                 {row.lastName || "-"}
             </td>
 
             {/* User */}
-            <td className="py-3 pr-4 align-top">
+            <td className="py-3.5 px-4 align-top">
                 <Input
                     type="text"
                     value={userValue}
                     onChange={(e) => setUserValue(e.target.value)}
                     onBlur={handleSubscriptionBlur}
-                    className="h-8 bg-emerald-950/40 border-emerald-700 text-xs text-emerald-50"
+                    className="h-8 border-zinc-200 bg-white text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50"
                     placeholder="Usuario"
                 />
             </td>
 
             {/* PIN */}
-            <td className="py-3 pr-4 align-top">
+            <td className="py-3.5 px-4 align-top">
                 <Input
                     type="text"
                     inputMode="numeric"
@@ -293,56 +293,56 @@ export function SubscriptionRow({ index, row, bankAccounts, accountPrice }) {
                     onChange={handlePinChange}
                     onBlur={handleSubscriptionBlur}
                     maxLength={4}
-                    className="h-8 w-20 bg-emerald-950/40 border-emerald-700 text-xs text-emerald-50 text-center"
+                    className="h-8 w-20 border-zinc-200 bg-white text-center text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50"
                     placeholder="PIN"
                 />
             </td>
 
             {/* Phone */}
-            <td className="py-3 pr-4 align-top text-xs">
+            <td className="py-3.5 px-4 align-top text-xs">
                 {row.phone || "-"}
             </td>
 
             {/* Service Start Date */}
-            <td className="py-3 pr-4 align-top">
+            <td className="py-3.5 px-4 align-top">
                 <Input
                     type="date"
                     value={serviceStart || ""}
                     onChange={(e) => setServiceStart(e.target.value)}
                     onBlur={handleSubscriptionBlur}
-                    className="h-8 bg-emerald-950/40 border-emerald-700 text-xs text-emerald-50"
+                    className="h-8 border-zinc-200 bg-white text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50"
                 />
             </td>
 
             {/* Period */}
-            <td className="py-3 pr-4 align-top text-center">
+            <td className="py-3.5 px-4 align-top text-center">
                 <Input
                     type="number"
                     min={1}
                     value={period}
                     onChange={handlePeriodChange}
                     onBlur={handleSubscriptionBlur}
-                    className="h-8 w-20 mx-auto bg-emerald-950/40 border-emerald-700 text-xs text-emerald-50 text-center"
+                    className="mx-auto h-8 w-20 border-zinc-200 bg-white text-center text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50"
                 />
             </td>
 
             {/* Next Payment Date */}
-            <td className="py-3 pr-4 align-top text-xs">
+            <td className="py-3.5 px-4 align-top text-xs">
                 {nextPaymentDisplay}
             </td>
 
             {/* Payment Method */}
-            <td className="py-3 pr-4 align-top">
+            <td className="py-3.5 px-4 align-top">
                 <Select value={bankAccountId} onValueChange={handleBankChange}>
-                    <SelectTrigger className="h-8 bg-emerald-950/40 border-emerald-700 text-xs text-emerald-50">
+                    <SelectTrigger className="h-8 border-zinc-200 bg-white text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50">
                         <SelectValue placeholder="Seleccionar banco" />
                     </SelectTrigger>
-                    <SelectContent className="bg-emerald-950 border-emerald-700 text-emerald-50">
+                    <SelectContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-700 dark:text-emerald-50">
                         {bankAccounts.map((bank) => (
                             <SelectItem
                                 key={bank.id_bank_account}
                                 value={String(bank.id_bank_account)}
-                                className="text-emerald-50"
+                                className="text-zinc-900 dark:text-emerald-50"
                             >
                                 {bank.bank_name}
                             </SelectItem>
@@ -352,9 +352,9 @@ export function SubscriptionRow({ index, row, bankAccounts, accountPrice }) {
             </td>
 
             {/* Payment */}
-            <td className="py-3 pr-4 align-top">
+            <td className="py-3.5 px-4 align-top">
                 <div className="flex items-center gap-1">
-                    <span className="text-xs text-emerald-50">$</span>
+                    <span className="text-xs text-zinc-700 dark:text-emerald-50">$</span>
                     <Input
                         type="number"
                         min={0}
@@ -362,17 +362,17 @@ export function SubscriptionRow({ index, row, bankAccounts, accountPrice }) {
                         value={paymentAmount}
                         onChange={(e) => setPaymentAmount(e.target.value)}
                         onBlur={handlePaymentBlur}
-                        className="h-8 bg-emerald-950/40 border-emerald-700 text-xs text-emerald-50"
+                        className="h-8 border-zinc-200 bg-white text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50"
                     />
                 </div>
             </td>
 
             {/* Payment Status */}
-            <td className="py-3 pr-4 align-top text-center">
+            <td className="py-3.5 px-4 align-top text-center">
                 <span
                     className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold ${isPaid
-                        ? "bg-emerald-700 text-emerald-50"
-                        : "bg-amber-700 text-amber-50"
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-700 dark:text-emerald-50"
+                        : "bg-amber-100 text-amber-800 dark:bg-amber-700 dark:text-amber-50"
                         }`}
                 >
                     {paymentStatusLabel}
@@ -380,7 +380,7 @@ export function SubscriptionRow({ index, row, bankAccounts, accountPrice }) {
             </td>
 
             {/* Actions */}
-            <td className="py-3 pr-4 align-top text-center">
+            <td className="py-3.5 px-4 align-top text-center">
                 <DeleteSubscriptionButton subscriptionId={row.id_subscription} />
             </td>
         </tr>

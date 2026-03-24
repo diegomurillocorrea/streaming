@@ -46,12 +46,12 @@ export function DeleteSubscriptionButton({ subscriptionId }) {
                 <Button
                     variant="outline"
                     size="sm"
-                    className="border-red-500/60 text-red-400 hover:bg-red-500/10"
+                    className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-400 dark:hover:bg-red-500/10"
                 >
                     Eliminar
                 </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent className="bg-emerald-950 border-emerald-700 text-white">
+            <AlertDialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-700 dark:text-white">
                 <AlertDialogHeader>
                     <AlertDialogTitle>¿Eliminar cliente de esta cuenta?</AlertDialogTitle>
                     <AlertDialogDescription>

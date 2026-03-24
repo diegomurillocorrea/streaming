@@ -7,9 +7,8 @@ import {
     CardDescription,
     CardContent,
 } from "@/components/ui/card";
-import { AddClientButton } from "@/components/interface/AddClientButton";
-import { SubscriptionRow } from "@/components/interface/SubscriptionRow";
 import { FinishMonthButton } from "@/components/interface/FinishMonthButton";
+import { AccountSubscriptionsTable } from "@/components/admin/account-subscriptions-table";
 
 function getCurrentMonthKey() {
     const now = new Date();
@@ -38,13 +37,13 @@ export default async function AccountSubscriptionsPage({ params }) {
 
     if (!rawAccountId) {
         return (
-            <main className="min-h-screen bg-emerald-950 text-emerald-50">
+            <main className="min-h-screen bg-white text-zinc-900 dark:bg-emerald-950 dark:text-emerald-50">
                 <div className="max-w-6xl mx-auto px-4 py-8 space-y-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-emerald-300">
                         STREAMING MURILLO
                     </p>
                     <h1 className="mt-1 text-3xl font-bold">Cuenta no encontrada</h1>
-                    <p className="text-sm text-emerald-400">
+                    <p className="text-sm text-zinc-600 dark:text-emerald-400">
                         No se proporcionó un id de cuenta en la URL. Asegúrate de visitar
                         una ruta como <code>/subscriptions/9</code>.
                     </p>
@@ -57,13 +56,13 @@ export default async function AccountSubscriptionsPage({ params }) {
 
     if (Number.isNaN(accountId)) {
         return (
-            <main className="min-h-screen bg-emerald-950 text-emerald-50">
+            <main className="min-h-screen bg-white text-zinc-900 dark:bg-emerald-950 dark:text-emerald-50">
                 <div className="max-w-6xl mx-auto px-4 py-8 space-y-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-emerald-300">
                         STREAMING MURILLO
                     </p>
                     <h1 className="mt-1 text-3xl font-bold">Id de cuenta inválido</h1>
-                    <p className="text-sm text-emerald-400">
+                    <p className="text-sm text-zinc-600 dark:text-emerald-400">
                         El id de cuenta <code>{String(rawAccountId)}</code> no es válido.
                     </p>
                 </div>
@@ -123,7 +122,7 @@ export default async function AccountSubscriptionsPage({ params }) {
       `
             )
             .eq("id_account", accountId)
-            .order("created_at", { ascending: true }),
+            .order("id_subscription", { ascending: true }),
 
         supabase
             .from("accounts")
@@ -143,12 +142,12 @@ export default async function AccountSubscriptionsPage({ params }) {
         supabase
             .from("clients")
             .select("id_client, name, lastName, email, phoneNumber")
-            .order("name", { ascending: true }),
+            .order("id_client", { ascending: true }),
 
         supabase
             .from("bank_accounts")
             .select("id_bank_account, bank_name")
-            .order("bank_name", { ascending: true }),
+            .order("id_bank_account", { ascending: true }),
     ]);
 
     if (error) {
@@ -222,12 +221,12 @@ export default async function AccountSubscriptionsPage({ params }) {
     const emptySlots = Math.max(MAX_SLOTS - rows.length, 0);
 
     return (
-        <main className="min-h-screen bg-emerald-950 text-emerald-50">
+        <main className="min-h-screen bg-white text-zinc-900 dark:bg-emerald-950 dark:text-emerald-50">
             <div className="w-400 mx-auto px-4 py-8 space-y-6">
                 {/* HEADER */}
                 <header className="space-y-2">
                     <Link href="/" className="inline-block cursor-pointer">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-emerald-300">
                             STREAMING MURILLO
                         </p>
                     </Link>
@@ -237,26 +236,26 @@ export default async function AccountSubscriptionsPage({ params }) {
                         <FinishMonthButton accountId={accountId} />
                     </div>
 
-                    <p className="text-sm text-emerald-400">
+                    <p className="text-sm text-zinc-600 dark:text-emerald-400">
                         Servicio: <span className="font-medium">{serviceName}</span>
                     </p>
-                    <p className="text-sm text-emerald-400">
+                    <p className="text-sm text-zinc-600 dark:text-emerald-400">
                         Correo de la cuenta:{" "}
                         <span className="font-medium">{accountEmail}</span>
                     </p>
                     {accountPaymentDay && (
-                        <p className="text-xs text-emerald-400">
+                        <p className="text-xs text-zinc-600 dark:text-emerald-400">
                             Día de pago: {formatHeaderDate(accountPaymentDay)}
                         </p>
                     )}
-                    <p className="text-xs text-emerald-400">
+                    <p className="text-xs text-zinc-600 dark:text-emerald-400">
                         Clientes: {rows.length} • Confirmados este mes: {confirmedCount} •
                         Pendientes: {pendingCount}
                     </p>
                 </header>
 
                 {/* TABLA */}
-                <Card className="border-emerald-800 bg-emerald-900">
+                <Card className="border border-zinc-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-emerald-900">
                     <CardHeader>
                         <CardTitle className="text-base">
                             Clientes y control de pagos
@@ -267,77 +266,14 @@ export default async function AccountSubscriptionsPage({ params }) {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="border-b border-emerald-800 text-emerald-50">
-                                    <tr className="text-xs uppercase">
-                                        <th className="py-2 pr-4">No. cliente</th>
-                                        <th className="py-2 pr-4">Nombre</th>
-                                        <th className="py-2 pr-4">Apellido</th>
-                                        <th className="py-2 pr-4">User</th>
-                                        <th className="py-2 pr-4">PIN</th>
-                                        <th className="py-2 pr-4">Teléfono</th>
-                                        <th className="py-2 pr-4">Inicio de servicio</th>
-                                        <th className="py-2 pr-4 text-center">
-                                            Período en meses
-                                        </th>
-                                        <th className="py-2 pr-4">Próximo pago</th>
-                                        <th className="py-2 pr-4">Método de pago</th>
-                                        <th className="py-2 pr-4">Pago</th>
-                                        <th className="py-2 pr-4 text-center">
-                                            Estado de pago
-                                        </th>
-                                        <th className="py-2 pr-4 text-center">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {/* Filas con data */}
-                                    {rows.map((row, index) => (
-                                        <SubscriptionRow
-                                            key={row.id_subscription}
-                                            index={index}
-                                            row={row}
-                                            bankAccounts={bankAccounts ?? []}
-                                            accountPrice={accountPrice}
-                                        />
-                                    ))}
-
-                                    {/* Filas vacías hasta llegar a 5 clientes */}
-                                    {Array.from({ length: emptySlots }).map((_, index) => (
-                                        <tr
-                                            key={`empty-${index}`}
-                                            className="border-b border-emerald-900/60 last:border-b-0 text-emerald-50"
-                                        >
-                                            <td className="py-3 pr-4 align-top text-xs">-</td>
-                                            <td className="py-3 pr-4 align-top text-xs">
-                                                <AddClientButton
-                                                    accountId={accountId}
-                                                    clients={clientsList ?? []}
-                                                />
-                                            </td>
-                                            <td className="py-3 pr-4 align-top text-xs">-</td>
-                                            <td className="py-3 pr-4 align-top text-xs">-</td>
-                                            <td className="py-3 pr-4 align-top text-xs">-</td>
-                                            <td className="py-3 pr-4 align-top text-xs">-</td>
-                                            <td className="py-3 pr-4 align-top text-xs">-</td>
-                                            <td className="py-3 pr-4 align-top text-xs">-</td>
-                                            <td className="py-3 pr-4 align-top text-center text-xs">
-                                                -
-                                            </td>
-                                            <td className="py-3 pr-4 align-top text-xs">-</td>
-                                            <td className="py-3 pr-4 align-top text-xs">-</td>
-                                            <td className="py-3 pr-4 align-top text-xs">-</td>
-                                            <td className="py-3 pr-4 align-top text-center text-xs">
-                                                -
-                                            </td>
-                                            <td className="py-3 pr-4 align-top text-center text-xs">
-                                                -
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        <AccountSubscriptionsTable
+                            accountId={accountId}
+                            rows={rows}
+                            emptySlots={emptySlots}
+                            clientsList={clientsList ?? []}
+                            bankAccounts={bankAccounts ?? []}
+                            accountPrice={accountPrice}
+                        />
                     </CardContent>
                 </Card>
             </div>

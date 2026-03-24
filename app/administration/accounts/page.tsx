@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 import {
@@ -42,6 +41,10 @@ import {
 
 import { LuPlus, LuPencil, LuTrash2, LuRefreshCw } from "react-icons/lu";
 
+import { TableScrollArea } from "@/components/admin/table-scroll-area";
+import { TableSearchInput } from "@/components/admin/table-search-input";
+import { rowMatchesSearch } from "@/lib/table-search";
+
 function formatDate(dateStr) {
   if (!dateStr) return "-";
   const d = new Date(dateStr);
@@ -64,6 +67,33 @@ export default function AdminAccountsPage() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [tableSearch, setTableSearch] = useState("");
+
+  const filteredAccounts = useMemo(() => {
+    if (!tableSearch.trim()) return accounts;
+    return accounts.filter((acc) => {
+      const companyName =
+        (Array.isArray(acc.companies)
+          ? acc.companies[0]?.company_name
+          : acc.companies?.company_name) ?? "";
+      const emailAddr =
+        (Array.isArray(acc.emails)
+          ? acc.emails[0]?.email_address
+          : acc.emails?.email_address) ?? "";
+      return rowMatchesSearch(
+        [
+          acc.id_account != null ? String(acc.id_account) : "",
+          acc.account_name,
+          companyName,
+          emailAddr,
+          acc.payment_date,
+          acc.price != null ? String(acc.price) : "",
+        ],
+        tableSearch
+      );
+    });
+  }, [accounts, tableSearch]);
 
   // formulario compartido para crear / editar
   const [form, setForm] = useState({
@@ -104,7 +134,7 @@ export default function AdminAccountsPage() {
           )
         `
         )
-        .order("created_at", { ascending: true }),
+        .order("id_account", { ascending: true }),
       supabase
         .from("companies")
         .select("id_company, company_name")
@@ -226,153 +256,148 @@ export default function AdminAccountsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-emerald-950 text-emerald-50">
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        {/* HEADER */}
-        <header className="flex items-center justify-between">
-          <div>
-            <Link href="/" className="inline-block cursor-pointer">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
-                STREAMING MURILLO
-              </p>
-            </Link>
-            <h1 className="mt-1 text-3xl font-bold">Administración de cuentas</h1>
-            <p className="text-sm text-emerald-400">
-              Administra todas las cuentas de streaming (empresa, correo, día de
-              pago y precio).
-            </p>
-          </div>
+    <main className="mx-auto space-y-4">
+      <header className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Cuentas</h1>
+          <p className="text-sm text-zinc-600 dark:text-emerald-300">
+            Administra todas las cuentas de streaming y su información asociada.
+          </p>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="border-emerald-700 text-emerald-200 hover:bg-emerald-800"
-              onClick={loadData}
-              disabled={loading}
-              title="Actualizar"
-            >
-              <LuRefreshCw className="w-4 h-4" />
-            </Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-500 text-emerald-50"
-              onClick={openCreateDialog}
-            >
-              <LuPlus className="w-4 h-4 mr-2" />
-              Nueva cuenta
-            </Button>
-          </div>
-        </header>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
+            onClick={loadData}
+            disabled={loading}
+            title="Actualizar"
+          >
+            <LuRefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
+            onClick={openCreateDialog}
+          >
+            <LuPlus className="mr-2 h-4 w-4" />
+            Nueva cuenta
+          </Button>
+        </div>
+      </header>
 
-        {/* TABLE */}
-        <Card className="border-emerald-800 bg-emerald-900">
-          <CardHeader>
-            <CardTitle className="text-base">Cuentas</CardTitle>
-            <CardDescription>
-              Todas las cuentas de streaming registradas en el sistema.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="border-b border-emerald-800 text-emerald-50">
-                  <tr className="text-xs uppercase">
-                    <th className="py-2 pr-4">Nombre de cuenta</th>
-                    <th className="py-2 pr-4">Servicio</th>
-                    <th className="py-2 pr-4">Email</th>
-                    <th className="py-2 pr-4">Día de pago</th>
-                    {/* 🆕 Columna Price */}
-                    <th className="py-2 pr-4 text-right">Precio</th>
-                    <th className="py-2 pr-4 text-right">Acciones</th>
+      <Card className="border border-zinc-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-emerald-900/60">
+        <CardHeader>
+          <CardTitle className="text-base">Lista de cuentas</CardTitle>
+          <CardDescription>
+            Todas las cuentas guardadas en la tabla <code>accounts</code>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <TableSearchInput
+            id="accounts-table-search"
+            value={tableSearch}
+            onChange={setTableSearch}
+            placeholder="Buscar por ID, cuenta, servicio, email o precio…"
+            aria-label="Buscar en la lista de cuentas"
+          />
+          <TableScrollArea>
+            <table className="w-full min-w-max border-collapse text-sm">
+              <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
+                <tr className="text-left text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-300">
+                  <th className="py-3.5 px-4">ID</th>
+                  <th className="py-3.5 px-4">Nombre de cuenta</th>
+                  <th className="py-3.5 px-4">Servicio</th>
+                  <th className="py-3.5 px-4">Email</th>
+                  <th className="py-3.5 px-4">Día de pago</th>
+                  <th className="py-3.5 px-4 text-right">Precio</th>
+                  <th className="py-3.5 px-4 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
+                      Cargando cuentas...
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="py-6 text-center text-sm text-emerald-300"
-                      >
-                        Cargando cuentas...
+                ) : accounts.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
+                      Aún no hay cuentas. Haz clic en &quot;Nueva cuenta&quot; para agregar la primera.
+                    </td>
+                  </tr>
+                ) : filteredAccounts.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
+                      No hay resultados para &quot;{tableSearch.trim()}&quot;.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAccounts.map((acc) => (
+                    <tr
+                      key={acc.id_account}
+                      className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
+                    >
+                      <td className="py-3.5 px-4 align-middle text-zinc-700 dark:text-emerald-100">
+                        {acc.id_account ?? "-"}
+                      </td>
+                      <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
+                        {acc.account_name || "-"}
+                      </td>
+                      <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
+                        {(Array.isArray(acc.companies)
+                          ? acc.companies[0]?.company_name
+                          : acc.companies?.company_name) ?? "-"}
+                      </td>
+                      <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
+                        {(Array.isArray(acc.emails)
+                          ? acc.emails[0]?.email_address
+                          : acc.emails?.email_address) ?? "-"}
+                      </td>
+                      <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
+                        {acc.payment_date ? formatDate(acc.payment_date) : "-"}
+                      </td>
+                      <td className="py-3.5 px-4 align-middle text-right text-zinc-600 dark:text-emerald-200">
+                        {acc.price !== null && acc.price !== undefined ? `$${acc.price.toFixed(2)}` : "-"}
+                      </td>
+                      <td className="py-3.5 px-4 align-middle">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
+                            onClick={() => openEditDialog(acc)}
+                          >
+                            <LuPencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="cursor-pointer border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-400 dark:hover:bg-red-500 dark:hover:text-white"
+                            onClick={() => setDeleteTarget(acc)}
+                          >
+                            <LuTrash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
-                  ) : accounts.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="py-6 text-center text-sm text-emerald-300"
-                      >
-                        Aún no hay cuentas. Haz clic en &quot;Nueva cuenta&quot; para
-                        agregar la primera.
-                      </td>
-                    </tr>
-                  ) : (
-                    accounts.map((acc) => (
-                      <tr
-                        key={acc.id_account}
-                        className="border-b border-emerald-900/60 last:border-b-0 text-emerald-50"
-                      >
-                        <td className="py-3 pr-4 align-top text-sm font-medium">
-                          {acc.account_name}
-                        </td>
-                        <td className="py-3 pr-4 align-top text-xs text-emerald-50">
-                          {(Array.isArray(acc.companies)
-                            ? acc.companies[0]?.company_name
-                            : acc.companies?.company_name) ?? "-"}
-                        </td>
-                        <td className="py-3 pr-4 align-top text-xs text-emerald-50">
-                          {(Array.isArray(acc.emails)
-                            ? acc.emails[0]?.email_address
-                            : acc.emails?.email_address) ?? "-"}
-                        </td>
-                        <td className="py-3 pr-4 align-top text-xs text-emerald-50">
-                          {acc.payment_date
-                            ? formatDate(acc.payment_date)
-                            : "-"}
-                        </td>
-                        {/* 🆕 celda Price */}
-                        <td className="py-3 pr-4 align-top text-xs text-right text-emerald-50">
-                          {acc.price !== null && acc.price !== undefined
-                            ? `$${acc.price.toFixed(2)}`
-                            : "-"}
-                        </td>
-                        <td className="py-3 pr-4 align-top text-xs text-right">
-                          <div className="inline-flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8 border-emerald-700 text-emerald-100 hover:bg-emerald-800"
-                              onClick={() => openEditDialog(acc)}
-                            >
-                              <LuPencil className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-8 w-8 border-red-800 text-red-200 hover:bg-red-900"
-                              onClick={() => setDeleteTarget(acc)}
-                            >
-                              <LuTrash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </TableScrollArea>
+        </CardContent>
+      </Card>
 
         {/* DIALOGO CREAR / EDITAR */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="w-full max-w-2xl sm:max-w-[720px] bg-emerald-950 border-emerald-700 text-emerald-50 max-w-lg">
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
             <DialogHeader>
               <DialogTitle className="text-lg font-semibold">
                 {editingAccount ? "Editar cuenta" : "Nueva cuenta"}
               </DialogTitle>
-              <DialogDescription className="text-xs text-emerald-300">
+              <DialogDescription>
                 {editingAccount
                   ? "Actualiza la información de esta cuenta de streaming."
                   : "Crea una nueva cuenta de streaming y define su precio."}
@@ -391,7 +416,6 @@ export default function AdminAccountsPage() {
                       account_name: e.target.value,
                     }))
                   }
-                  className="bg-emerald-900 border-emerald-700 text-sm text-emerald-50"
                   required
                 />
               </div>
@@ -405,10 +429,10 @@ export default function AdminAccountsPage() {
                       setForm((prev) => ({ ...prev, id_company: value }))
                     }
                   >
-                    <SelectTrigger className="w-full bg-emerald-900 border-emerald-700 text-sm text-emerald-50">
+                    <SelectTrigger className="w-full border-zinc-200 bg-white text-sm text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700 dark:text-white">
                       <SelectValue placeholder="Seleccionar empresa" />
                     </SelectTrigger>
-                    <SelectContent className="bg-emerald-950 border-emerald-700 text-emerald-50">
+                    <SelectContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-700 dark:text-white">
                       {companies.map((c) => (
                         <SelectItem
                           key={c.id_company}
@@ -429,10 +453,10 @@ export default function AdminAccountsPage() {
                       setForm((prev) => ({ ...prev, id_email: value }))
                     }
                   >
-                    <SelectTrigger className="w-full bg-emerald-900 border-emerald-700 text-sm text-emerald-50">
+                    <SelectTrigger className="w-full border-zinc-200 bg-white text-sm text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700 dark:text-white">
                       <SelectValue placeholder="Seleccionar correo" />
                     </SelectTrigger>
-                    <SelectContent className="bg-emerald-950 border-emerald-700 text-emerald-50">
+                    <SelectContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-700 dark:text-white">
                       {emails.map((e) => (
                         <SelectItem
                           key={e.id_email}
@@ -455,7 +479,6 @@ export default function AdminAccountsPage() {
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, password: e.target.value }))
                   }
-                  className="bg-emerald-900 border-emerald-700 text-sm text-emerald-50"
                 />
               </div>
 
@@ -472,7 +495,6 @@ export default function AdminAccountsPage() {
                         payment_date: e.target.value,
                       }))
                     }
-                    className="bg-emerald-900 border-emerald-700 text-sm text-emerald-50"
                   />
                 </div>
 
@@ -480,7 +502,7 @@ export default function AdminAccountsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="price">Precio</Label>
                   <div className="flex items-center gap-1">
-                    <span className="text-sm text-emerald-200">$</span>
+                    <span className="text-sm text-zinc-600 dark:text-emerald-200">$</span>
                     <Input
                       id="price"
                       type="number"
@@ -490,18 +512,17 @@ export default function AdminAccountsPage() {
                       onChange={(e) =>
                         setForm((prev) => ({ ...prev, price: e.target.value }))
                       }
-                      className="bg-emerald-900 border-emerald-700 text-sm text-emerald-50"
+                      className="border-zinc-200 bg-white text-sm text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700"
                       placeholder="0.00"
                     />
                   </div>
                 </div>
               </div>
 
-              <DialogFooter className="mt-4">
+              <DialogFooter>
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-emerald-700 text-emerald-100 hover:bg-emerald-800"
                   onClick={() => setIsDialogOpen(false)}
                   disabled={saving}
                 >
@@ -509,7 +530,7 @@ export default function AdminAccountsPage() {
                 </Button>
                 <Button
                   type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-emerald-50"
+                  className="bg-emerald-600 text-white hover:bg-emerald-700"
                   disabled={saving}
                 >
                   {saving
@@ -522,46 +543,41 @@ export default function AdminAccountsPage() {
                 </Button>
               </DialogFooter>
             </form>
-          </DialogContent>
-        </Dialog>
+        </DialogContent>
+      </Dialog>
 
         {/* MODAL ELIMINAR */}
-        <AlertDialog
-          open={!!deleteTarget}
-          onOpenChange={(open) => {
-            if (!open) setDeleteTarget(null);
-          }}
-        >
-          <AlertDialogContent className="bg-emerald-950 border-emerald-700 text-emerald-50">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Eliminar cuenta</AlertDialogTitle>
-              <AlertDialogDescription className="text-xs text-emerald-300">
-                Esto eliminará permanentemente la cuenta{" "}
-                <span className="font-semibold">
-                  {deleteTarget?.account_name}
-                </span>{" "}
-                y su configuración. Las suscripciones vinculadas a esta cuenta
-                no se eliminarán automáticamente.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel
-                className="border-emerald-700 text-emerald-100 hover:bg-emerald-800"
-                disabled={deleting}
-              >
-                Cancelar
-              </AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-red-700 hover:bg-red-600 text-red-50"
-                onClick={handleConfirmDelete}
-                disabled={deleting}
-              >
-                {deleting ? "Eliminando..." : "Eliminar"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar cuenta</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Seguro que deseas eliminar la cuenta{" "}
+              <span className="font-mono text-zinc-700 dark:text-emerald-200">
+                {deleteTarget?.account_name}
+              </span>
+              ? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+            >
+              {deleting ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

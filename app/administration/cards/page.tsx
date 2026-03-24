@@ -49,6 +49,10 @@ import {
     LuRefreshCw,
 } from "react-icons/lu";
 
+import { TableScrollArea } from "@/components/admin/table-scroll-area";
+import { TableSearchInput } from "@/components/admin/table-search-input";
+import { rowMatchesSearch } from "@/lib/table-search";
+
 export default function CardsAdminPage() {
     const supabase = useMemo(() => createBrowserClient(), []);
 
@@ -100,6 +104,10 @@ export default function CardsAdminPage() {
     const [typeToDelete, setTypeToDelete] = useState(null);
     const [deletingType, setDeletingType] = useState(false);
 
+    const [cardsTableSearch, setCardsTableSearch] = useState("");
+    const [networksTableSearch, setNetworksTableSearch] = useState("");
+    const [typesTableSearch, setTypesTableSearch] = useState("");
+
     // ---------- Loaders ----------
     const loadReferenceData = async () => {
         setLoadingRefs(true);
@@ -113,11 +121,11 @@ export default function CardsAdminPage() {
             supabase
                 .from("payment_networks")
                 .select("*")
-                .order("name", { ascending: true }),
+                .order("id_payment_network", { ascending: true }),
             supabase
                 .from("card_types")
                 .select("*")
-                .order("name", { ascending: true }),
+                .order("id_card_type", { ascending: true }),
         ]);
 
         if (netErr) {
@@ -144,7 +152,7 @@ export default function CardsAdminPage() {
         const { data, error } = await supabase
             .from("cards")
             .select("*")
-            .order("created_at", { ascending: false });
+            .order("id_card", { ascending: true });
 
         if (error) {
             console.error(error);
@@ -222,6 +230,44 @@ export default function CardsAdminPage() {
 
     const getCardTypeName = (id) =>
         cardTypes.find((t) => t.id_card_type === id)?.name || "-";
+
+    const filteredCards = useMemo(() => {
+        if (!cardsTableSearch.trim()) return cards;
+        return cards.filter((row) =>
+            rowMatchesSearch(
+                [
+                    row.id_card,
+                    row.owner_name,
+                    row.card_number,
+                    row.expirationDate,
+                    row.created_at,
+                    row.id_payment_network,
+                    row.id_card_type,
+                ],
+                cardsTableSearch
+            )
+        );
+    }, [cards, cardsTableSearch]);
+
+    const filteredPaymentNetworks = useMemo(() => {
+        if (!networksTableSearch.trim()) return paymentNetworks;
+        return paymentNetworks.filter((row) =>
+            rowMatchesSearch(
+                [row.id_payment_network, row.name, row.created_at],
+                networksTableSearch
+            )
+        );
+    }, [paymentNetworks, networksTableSearch]);
+
+    const filteredCardTypes = useMemo(() => {
+        if (!typesTableSearch.trim()) return cardTypes;
+        return cardTypes.filter((row) =>
+            rowMatchesSearch(
+                [row.id_card_type, row.name, row.created_at],
+                typesTableSearch
+            )
+        );
+    }, [cardTypes, typesTableSearch]);
 
     const formatCardNumber = (value) => {
         if (!value) return "-";
@@ -619,11 +665,11 @@ export default function CardsAdminPage() {
 
     // ---------- Render ----------
     return (
-        <main className="max-w-6xl mx-auto space-y-4">
+        <main className="mx-auto space-y-4">
             <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">Tarjetas</h1>
-                    <p className="text-sm text-emerald-300">
+                    <p className="text-sm text-zinc-600 dark:text-emerald-300">
                         Administra tarjetas y los catálogos de redes de pago y tipos de
                         tarjeta.
                     </p>
@@ -634,7 +680,7 @@ export default function CardsAdminPage() {
                         <Button
                             variant="outline"
                             size="icon"
-                            className="border-emerald-400/60 cursor-pointer"
+                            className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                             onClick={loadCards}
                             disabled={loadingCards}
                         >
@@ -645,7 +691,7 @@ export default function CardsAdminPage() {
                         </Button>
 
                         <Button
-                            className="bg-emerald-500 hover:bg-emerald-600 cursor-pointer"
+                            className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
                             onClick={openCreateCardModal}
                             disabled={!referencesReady}
                         >
@@ -657,14 +703,14 @@ export default function CardsAdminPage() {
                     <div className="flex gap-2">
                         <Button
                             variant="outline"
-                            className="border-emerald-400/60 cursor-pointer text-xs"
+                            className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60 text-xs"
                             onClick={openManageNetworks}
                         >
                             Gestionar redes de pago
                         </Button>
                         <Button
                             variant="outline"
-                            className="border-emerald-400/60 cursor-pointer text-xs"
+                            className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60 text-xs"
                             onClick={openManageTypes}
                         >
                             Gestionar tipos de tarjeta
@@ -674,73 +720,102 @@ export default function CardsAdminPage() {
             </header>
 
             {cardsError && (
-                <p className="text-sm text-red-400">{cardsError}</p>
+                <p className="text-sm text-red-600 dark:text-red-400">{cardsError}</p>
             )}
 
-            <Card className="border-emerald-800 bg-emerald-900/60">
+            <Card className="border border-zinc-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-emerald-900/60">
                 <CardHeader>
                     <CardTitle className="text-base">Lista de tarjetas</CardTitle>
                     <CardDescription>
                         Todas las tarjetas guardadas en la tabla <code>cards</code>.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    {loadingCards ? (
-                        <p className="text-sm text-emerald-300">Cargando tarjetas...</p>
-                    ) : cards.length === 0 ? (
-                        <p className="text-sm text-emerald-300">
-                            No se encontraron tarjetas. Haz clic en &quot;Nueva tarjeta&quot; para agregar una.
-                        </p>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm border-collapse">
-                                <thead>
-                                    <tr className="border-b border-emerald-800 text-left text-xs uppercase text-emerald-300">
-                                        <th className="py-2 pr-4">ID</th>
-                                        <th className="py-2 pr-4">Titular</th>
-                                        <th className="py-2 pr-4">Número de tarjeta</th>
-                                        <th className="py-2 pr-4">Red</th>
-                                        <th className="py-2 pr-4">Tipo</th>
-                                        <th className="py-2 pr-4">Vencimiento</th>
-                                        <th className="py-2 pr-4">Creado el</th>
-                                        <th className="py-2 pr-4 text-right">Acciones</th>
+                <CardContent className="space-y-3">
+                    <TableSearchInput
+                        id="cards-main-table-search"
+                        value={cardsTableSearch}
+                        onChange={setCardsTableSearch}
+                        placeholder="Buscar por titular, número, red o tipo…"
+                        aria-label="Buscar en la lista de tarjetas"
+                    />
+                    <TableScrollArea>
+                        <table className="w-full min-w-max border-collapse text-sm">
+                            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
+                                <tr className="text-left text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-300">
+                                    <th className="py-3.5 px-4">ID</th>
+                                    <th className="py-3.5 px-4">Titular</th>
+                                    <th className="py-3.5 px-4">Número de tarjeta</th>
+                                    <th className="py-3.5 px-4">Red</th>
+                                    <th className="py-3.5 px-4">Tipo</th>
+                                    <th className="py-3.5 px-4">Vencimiento</th>
+                                    <th className="py-3.5 px-4">Creado el</th>
+                                    <th className="py-3.5 px-4 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loadingCards ? (
+                                    <tr>
+                                        <td
+                                            colSpan={8}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            Cargando tarjetas...
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {cards.map((row) => (
+                                ) : cards.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={8}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            No se encontraron tarjetas. Haz clic en &quot;Nueva
+                                            tarjeta&quot; para agregar una.
+                                        </td>
+                                    </tr>
+                                ) : filteredCards.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={8}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            No hay resultados para &quot;{cardsTableSearch.trim()}&quot;.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredCards.map((row) => (
                                         <tr
                                             key={row.id_card}
-                                            className="border-b border-emerald-900/60 last:border-b-0"
+                                            className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
                                         >
-                                            <td className="py-2 pr-4 align-middle text-emerald-100">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-700 dark:text-emerald-100">
                                                 {row.id_card}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-50">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                 {row.owner_name}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-50">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                 {formatCardNumber(row.card_number)}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {getNetworkName(row.id_payment_network)}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {getCardTypeName(row.id_card_type)}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {row.expirationDate ? expiryDbToInput(row.expirationDate) : "-"}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {row.created_at
                                                     ? new Date(row.created_at).toLocaleString()
                                                     : "-"}
                                             </td>
-                                            <td className="py-2 pr-0 align-middle">
+                                            <td className="py-3.5 px-4 align-middle">
                                                 <div className="flex justify-end gap-2">
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="border-emerald-400/60 cursor-pointer"
+                                                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                                                         onClick={() => openEditCardModal(row)}
                                                     >
                                                         <LuPencil className="h-4 w-4" />
@@ -748,7 +823,7 @@ export default function CardsAdminPage() {
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="border-red-500/60 text-red-400 hover:bg-red-500 hover:text-white cursor-pointer"
+                                                        className="cursor-pointer border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-400 dark:hover:bg-red-500 dark:hover:text-white"
                                                         onClick={() => openDeleteCardModal(row)}
                                                     >
                                                         <LuTrash2 className="h-4 w-4" />
@@ -756,17 +831,17 @@ export default function CardsAdminPage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </TableScrollArea>
                 </CardContent>
             </Card>
 
             {/* ---------- Card create modal ---------- */}
             <Dialog open={createCardOpen} onOpenChange={setCreateCardOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <DialogHeader>
                         <DialogTitle>Nueva tarjeta</DialogTitle>
                         <DialogDescription>
@@ -808,10 +883,10 @@ export default function CardsAdminPage() {
                                 onValueChange={setFormNetworkId}
                                 disabled={savingCard || loadingRefs}
                             >
-                                <SelectTrigger className="bg-emerald-900 border-emerald-700">
+                                <SelectTrigger className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700 dark:text-white">
                                     <SelectValue placeholder="Seleccionar red de pago" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-emerald-950 border-emerald-700 text-white">
+                                <SelectContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-700 dark:text-white">
                                     {paymentNetworks.map((network) => (
                                         <SelectItem
                                             key={network.id_payment_network}
@@ -831,10 +906,10 @@ export default function CardsAdminPage() {
                                 onValueChange={setFormCardTypeId}
                                 disabled={savingCard || loadingRefs}
                             >
-                                <SelectTrigger className="bg-emerald-900 border-emerald-700">
+                                <SelectTrigger className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700 dark:text-white">
                                     <SelectValue placeholder="Seleccionar tipo de tarjeta" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-emerald-950 border-emerald-700 text-white">
+                                <SelectContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-700 dark:text-white">
                                     {cardTypes.map((type) => (
                                         <SelectItem
                                             key={type.id_card_type}
@@ -862,7 +937,7 @@ export default function CardsAdminPage() {
                         </div>
 
                         {cardsError && (
-                            <p className="text-sm text-red-400">{cardsError}</p>
+                            <p className="text-sm text-red-600 dark:text-red-400">{cardsError}</p>
                         )}
                     </div>
 
@@ -877,7 +952,7 @@ export default function CardsAdminPage() {
                         <Button
                             onClick={handleCreateCard}
                             disabled={savingCard}
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                         >
                             {savingCard ? "Guardando..." : "Crear"}
                         </Button>
@@ -887,7 +962,7 @@ export default function CardsAdminPage() {
 
             {/* ---------- Card edit modal ---------- */}
             <Dialog open={editCardOpen} onOpenChange={setEditCardOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <DialogHeader>
                         <DialogTitle>Editar tarjeta</DialogTitle>
                         <DialogDescription>
@@ -927,10 +1002,10 @@ export default function CardsAdminPage() {
                                 onValueChange={setFormNetworkId}
                                 disabled={savingCard || loadingRefs}
                             >
-                                <SelectTrigger className="bg-emerald-900 border-emerald-700">
+                                <SelectTrigger className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700 dark:text-white">
                                     <SelectValue placeholder="Seleccionar red de pago" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-emerald-950 border-emerald-700 text-white">
+                                <SelectContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-700 dark:text-white">
                                     {paymentNetworks.map((network) => (
                                         <SelectItem
                                             key={network.id_payment_network}
@@ -950,10 +1025,10 @@ export default function CardsAdminPage() {
                                 onValueChange={setFormCardTypeId}
                                 disabled={savingCard || loadingRefs}
                             >
-                                <SelectTrigger className="bg-emerald-900 border-emerald-700">
+                                <SelectTrigger className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700 dark:text-white">
                                     <SelectValue placeholder="Seleccionar tipo de tarjeta" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-emerald-950 border-emerald-700 text-white">
+                                <SelectContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-700 dark:text-white">
                                     {cardTypes.map((type) => (
                                         <SelectItem
                                             key={type.id_card_type}
@@ -981,7 +1056,7 @@ export default function CardsAdminPage() {
                         </div>
 
                         {cardsError && (
-                            <p className="text-sm text-red-400">{cardsError}</p>
+                            <p className="text-sm text-red-600 dark:text-red-400">{cardsError}</p>
                         )}
                     </div>
 
@@ -996,7 +1071,7 @@ export default function CardsAdminPage() {
                         <Button
                             onClick={handleUpdateCard}
                             disabled={savingCard}
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                         >
                             {savingCard ? "Guardando..." : "Guardar cambios"}
                         </Button>
@@ -1006,12 +1081,12 @@ export default function CardsAdminPage() {
 
             {/* ---------- Card delete modal ---------- */}
             <AlertDialog open={deleteCardOpen} onOpenChange={setDeleteCardOpen}>
-                <AlertDialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <AlertDialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Eliminar tarjeta</AlertDialogTitle>
                         <AlertDialogDescription>
                             ¿Seguro que deseas eliminar esta tarjeta de{" "}
-                            <span className="font-mono text-emerald-200">
+                            <span className="font-mono text-zinc-700 dark:text-emerald-200">
                                 {currentCard?.owner_name}
                             </span>
                             ? Esta acción no se puede deshacer.
@@ -1034,7 +1109,7 @@ export default function CardsAdminPage() {
 
             {/* ---------- Manage payment networks modal ---------- */}
             <Dialog open={manageNetworksOpen} onOpenChange={setManageNetworksOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white max-w-2xl">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Redes de pago</DialogTitle>
                         <DialogDescription>
@@ -1045,7 +1120,7 @@ export default function CardsAdminPage() {
 
                     <div className="space-y-4 py-2">
                         {networksError && (
-                            <p className="text-sm text-red-400">{networksError}</p>
+                            <p className="text-sm text-red-600 dark:text-red-400">{networksError}</p>
                         )}
 
                         <div className="space-y-1">
@@ -1062,25 +1137,32 @@ export default function CardsAdminPage() {
                                 <Button
                                     onClick={handleCreateNetwork}
                                     disabled={savingNetwork}
-                                    className="bg-emerald-500 hover:bg-emerald-600"
+                                    className="bg-emerald-600 text-white hover:bg-emerald-700"
                                 >
                                     {savingNetwork ? "Guardando..." : "Agregar"}
                                 </Button>
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm border-collapse">
-                                <thead>
-                                    <tr className="border-b border-emerald-800 text-left text-xs uppercase text-emerald-300">
-                                        <th className="py-2 pr-4">ID</th>
-                                        <th className="py-2 pr-4">Nombre</th>
-                                        <th className="py-2 pr-4">Creado el</th>
-                                        <th className="py-2 pr-4 text-right">Acciones</th>
+                        <TableSearchInput
+                            id="networks-modal-table-search"
+                            value={networksTableSearch}
+                            onChange={setNetworksTableSearch}
+                            placeholder="Buscar red de pago…"
+                            aria-label="Buscar en redes de pago"
+                        />
+                        <TableScrollArea>
+                            <table className="w-full min-w-max border-collapse text-sm">
+                                <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
+                                    <tr className="text-left text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-300">
+                                        <th className="py-3.5 px-4">ID</th>
+                                        <th className="py-3.5 px-4">Nombre</th>
+                                        <th className="py-3.5 px-4">Creado el</th>
+                                        <th className="py-3.5 px-4 text-right">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {paymentNetworks.map((row) => {
+                                    {filteredPaymentNetworks.map((row) => {
                                         const isEditing =
                                             editingNetwork &&
                                             editingNetwork.id_payment_network ===
@@ -1089,12 +1171,12 @@ export default function CardsAdminPage() {
                                         return (
                                             <tr
                                                 key={row.id_payment_network}
-                                                className="border-b border-emerald-900/60 last:border-b-0"
+                                                className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
                                             >
-                                                <td className="py-2 pr-4 align-middle text-emerald-100">
+                                                <td className="py-3.5 px-4 align-middle text-zinc-700 dark:text-emerald-100">
                                                     {row.id_payment_network}
                                                 </td>
-                                                <td className="py-2 pr-4 align-middle text-emerald-50">
+                                                <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                     {isEditing ? (
                                                         <Input
                                                             value={editingNetworkName}
@@ -1107,19 +1189,19 @@ export default function CardsAdminPage() {
                                                         row.name
                                                     )}
                                                 </td>
-                                                <td className="py-2 pr-4 align-middle text-emerald-200">
+                                                <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                     {row.created_at
                                                         ? new Date(row.created_at).toLocaleString()
                                                         : "-"}
                                                 </td>
-                                                <td className="py-2 pr-0 align-middle">
+                                                <td className="py-3.5 px-4 align-middle">
                                                     <div className="flex justify-end gap-2">
                                                         {isEditing ? (
                                                             <>
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    className="border-emerald-400/60 cursor-pointer"
+                                                                    className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                                                                     onClick={handleUpdateNetwork}
                                                                     disabled={savingNetwork}
                                                                 >
@@ -1139,7 +1221,7 @@ export default function CardsAdminPage() {
                                                                 <Button
                                                                     size="icon"
                                                                     variant="outline"
-                                                                    className="border-emerald-400/60 cursor-pointer"
+                                                                    className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                                                                     onClick={() => startEditNetwork(row)}
                                                                 >
                                                                     <LuPencil className="h-4 w-4" />
@@ -1147,7 +1229,7 @@ export default function CardsAdminPage() {
                                                                 <Button
                                                                     size="icon"
                                                                     variant="outline"
-                                                                    className="border-red-500/60 text-red-400 hover:bg-red-500 hover:text-white cursor-pointer"
+                                                                    className="cursor-pointer border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-400 dark:hover:bg-red-500 dark:hover:text-white"
                                                                     onClick={() => openNetworkDelete(row)}
                                                                 >
                                                                     <LuTrash2 className="h-4 w-4" />
@@ -1161,7 +1243,7 @@ export default function CardsAdminPage() {
                                     })}
                                 </tbody>
                             </table>
-                        </div>
+                        </TableScrollArea>
                     </div>
                 </DialogContent>
             </Dialog>
@@ -1170,12 +1252,12 @@ export default function CardsAdminPage() {
                 open={networkDeleteOpen}
                 onOpenChange={setNetworkDeleteOpen}
             >
-                <AlertDialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <AlertDialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Eliminar red de pago</AlertDialogTitle>
                         <AlertDialogDescription>
                             ¿Seguro que deseas eliminar{" "}
-                            <span className="font-mono text-emerald-200">
+                            <span className="font-mono text-zinc-700 dark:text-emerald-200">
                                 {networkToDelete?.name}
                             </span>
                             ? Esta acción no se puede deshacer y puede fallar si hay
@@ -1199,7 +1281,7 @@ export default function CardsAdminPage() {
 
             {/* ---------- Manage card types modal ---------- */}
             <Dialog open={manageTypesOpen} onOpenChange={setManageTypesOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white max-w-2xl">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Tipos de tarjeta</DialogTitle>
                         <DialogDescription>
@@ -1209,7 +1291,7 @@ export default function CardsAdminPage() {
 
                     <div className="space-y-4 py-2">
                         {typesError && (
-                            <p className="text-sm text-red-400">{typesError}</p>
+                            <p className="text-sm text-red-600 dark:text-red-400">{typesError}</p>
                         )}
 
                         <div className="space-y-1">
@@ -1226,25 +1308,32 @@ export default function CardsAdminPage() {
                                 <Button
                                     onClick={handleCreateType}
                                     disabled={savingType}
-                                    className="bg-emerald-500 hover:bg-emerald-600"
+                                    className="bg-emerald-600 text-white hover:bg-emerald-700"
                                 >
                                     {savingType ? "Guardando..." : "Agregar"}
                                 </Button>
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm border-collapse">
-                                <thead>
-                                    <tr className="border-b border-emerald-800 text-left text-xs uppercase text-emerald-300">
-                                        <th className="py-2 pr-4">ID</th>
-                                        <th className="py-2 pr-4">Nombre</th>
-                                        <th className="py-2 pr-4">Creado el</th>
-                                        <th className="py-2 pr-4 text-right">Acciones</th>
+                        <TableSearchInput
+                            id="types-modal-table-search"
+                            value={typesTableSearch}
+                            onChange={setTypesTableSearch}
+                            placeholder="Buscar tipo de tarjeta…"
+                            aria-label="Buscar en tipos de tarjeta"
+                        />
+                        <TableScrollArea>
+                            <table className="w-full min-w-max border-collapse text-sm">
+                                <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
+                                    <tr className="text-left text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-300">
+                                        <th className="py-3.5 px-4">ID</th>
+                                        <th className="py-3.5 px-4">Nombre</th>
+                                        <th className="py-3.5 px-4">Creado el</th>
+                                        <th className="py-3.5 px-4 text-right">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {cardTypes.map((row) => {
+                                    {filteredCardTypes.map((row) => {
                                         const isEditing =
                                             editingType &&
                                             editingType.id_card_type === row.id_card_type;
@@ -1252,12 +1341,12 @@ export default function CardsAdminPage() {
                                         return (
                                             <tr
                                                 key={row.id_card_type}
-                                                className="border-b border-emerald-900/60 last:border-b-0"
+                                                className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
                                             >
-                                                <td className="py-2 pr-4 align-middle text-emerald-100">
+                                                <td className="py-3.5 px-4 align-middle text-zinc-700 dark:text-emerald-100">
                                                     {row.id_card_type}
                                                 </td>
-                                                <td className="py-2 pr-4 align-middle text-emerald-50">
+                                                <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                     {isEditing ? (
                                                         <Input
                                                             value={editingTypeName}
@@ -1270,19 +1359,19 @@ export default function CardsAdminPage() {
                                                         row.name
                                                     )}
                                                 </td>
-                                                <td className="py-2 pr-4 align-middle text-emerald-200">
+                                                <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                     {row.created_at
                                                         ? new Date(row.created_at).toLocaleString()
                                                         : "-"}
                                                 </td>
-                                                <td className="py-2 pr-0 align-middle">
+                                                <td className="py-3.5 px-4 align-middle">
                                                     <div className="flex justify-end gap-2">
                                                         {isEditing ? (
                                                             <>
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    className="border-emerald-400/60 cursor-pointer"
+                                                                    className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                                                                     onClick={handleUpdateType}
                                                                     disabled={savingType}
                                                                 >
@@ -1302,7 +1391,7 @@ export default function CardsAdminPage() {
                                                                 <Button
                                                                     size="icon"
                                                                     variant="outline"
-                                                                    className="border-emerald-400/60 cursor-pointer"
+                                                                    className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                                                                     onClick={() => startEditType(row)}
                                                                 >
                                                                     <LuPencil className="h-4 w-4" />
@@ -1310,7 +1399,7 @@ export default function CardsAdminPage() {
                                                                 <Button
                                                                     size="icon"
                                                                     variant="outline"
-                                                                    className="border-red-500/60 text-red-400 hover:bg-red-500 hover:text-white cursor-pointer"
+                                                                    className="cursor-pointer border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-400 dark:hover:bg-red-500 dark:hover:text-white"
                                                                     onClick={() => openTypeDelete(row)}
                                                                 >
                                                                     <LuTrash2 className="h-4 w-4" />
@@ -1324,18 +1413,18 @@ export default function CardsAdminPage() {
                                     })}
                                 </tbody>
                             </table>
-                        </div>
+                        </TableScrollArea>
                     </div>
                 </DialogContent>
             </Dialog>
 
             <AlertDialog open={typeDeleteOpen} onOpenChange={setTypeDeleteOpen}>
-                <AlertDialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <AlertDialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Eliminar tipo de tarjeta</AlertDialogTitle>
                         <AlertDialogDescription>
                             ¿Seguro que deseas eliminar{" "}
-                            <span className="font-mono text-emerald-200">
+                            <span className="font-mono text-zinc-700 dark:text-emerald-200">
                                 {typeToDelete?.name}
                             </span>
                             ? Esta acción no se puede deshacer y puede fallar si hay

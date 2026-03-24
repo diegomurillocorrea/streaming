@@ -41,6 +41,10 @@ import {
     LuRefreshCw,
 } from "react-icons/lu";
 
+import { TableScrollArea } from "@/components/admin/table-scroll-area";
+import { TableSearchInput } from "@/components/admin/table-search-input";
+import { rowMatchesSearch } from "@/lib/table-search";
+
 export default function CompaniesAdminPage() {
     const supabase = useMemo(() => createBrowserClient(), []);
 
@@ -57,6 +61,18 @@ export default function CompaniesAdminPage() {
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
+    const [tableSearch, setTableSearch] = useState("");
+
+    const filteredCompanies = useMemo(() => {
+        if (!tableSearch.trim()) return companies;
+        return companies.filter((row) =>
+            rowMatchesSearch(
+                [row.id_company, row.company_name, row.created_at],
+                tableSearch
+            )
+        );
+    }, [companies, tableSearch]);
+
     // Load data
     const loadCompanies = async () => {
         setLoading(true);
@@ -65,7 +81,7 @@ export default function CompaniesAdminPage() {
         const { data, error } = await supabase
             .from("companies")
             .select("*")
-            .order("created_at", { ascending: false });
+            .order("id_company", { ascending: true });
 
         if (error) {
             console.error(error);
@@ -189,11 +205,11 @@ export default function CompaniesAdminPage() {
     };
 
     return (
-        <main className="max-w-5xl mx-auto space-y-4">
+        <main className="mx-auto space-y-4">
             <header className="flex items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold">Empresas</h1>
-                    <p className="text-sm text-emerald-300">
+                    <p className="text-sm text-zinc-600 dark:text-emerald-300">
                         Administra las empresas vinculadas a tus suscripciones.
                     </p>
                 </div>
@@ -202,7 +218,7 @@ export default function CompaniesAdminPage() {
                     <Button
                         variant="outline"
                         size="icon"
-                        className="border-emerald-400/60 cursor-pointer"
+                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                         onClick={loadCompanies}
                         disabled={loading}
                     >
@@ -212,7 +228,7 @@ export default function CompaniesAdminPage() {
                     </Button>
 
                     <Button
-                        className="bg-emerald-500 hover:bg-emerald-600 cursor-pointer"
+                        className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
                         onClick={openCreateModal}
                     >
                         <LuPlus className="mr-2 h-4 w-4" />
@@ -222,57 +238,86 @@ export default function CompaniesAdminPage() {
             </header>
 
             {globalError && (
-                <p className="text-sm text-red-400">{globalError}</p>
+                <p className="text-sm text-red-600 dark:text-red-400">{globalError}</p>
             )}
 
-            <Card className="border-emerald-800 bg-emerald-900/60">
+            <Card className="border border-zinc-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-emerald-900/60">
                 <CardHeader>
                     <CardTitle className="text-base">Lista de empresas</CardTitle>
                     <CardDescription>
                         All companies stored in the <code>companies</code> table.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <p className="text-sm text-emerald-300">Cargando empresas...</p>
-                    ) : companies.length === 0 ? (
-                        <p className="text-sm text-emerald-300">
-                            No se encontraron empresas. Haz clic en &quot;Nueva empresa&quot; para agregar una.
-                        </p>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm border-collapse">
-                                <thead>
-                                    <tr className="border-b border-emerald-800 text-left text-xs uppercase text-emerald-300">
-                                        <th className="py-2 pr-4">ID</th>
-                                        <th className="py-2 pr-4">Nombre de empresa</th>
-                                        <th className="py-2 pr-4">Creado el</th>
-                                        <th className="py-2 pr-4 text-right">Acciones</th>
+                <CardContent className="space-y-3">
+                    <TableSearchInput
+                        id="companies-table-search"
+                        value={tableSearch}
+                        onChange={setTableSearch}
+                        placeholder="Buscar por ID o nombre de empresa…"
+                        aria-label="Buscar en la lista de empresas"
+                    />
+                    <TableScrollArea>
+                        <table className="w-full min-w-max border-collapse text-sm">
+                            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
+                                <tr className="text-left text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-300">
+                                    <th className="py-3.5 px-4">ID</th>
+                                    <th className="py-3.5 px-4">Nombre de empresa</th>
+                                    <th className="py-3.5 px-4">Creado el</th>
+                                    <th className="py-3.5 px-4 text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {loading ? (
+                                    <tr>
+                                        <td
+                                            colSpan={4}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            Cargando empresas...
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {companies.map((row) => (
+                                ) : companies.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={4}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            No se encontraron empresas. Haz clic en &quot;Nueva
+                                            empresa&quot; para agregar una.
+                                        </td>
+                                    </tr>
+                                ) : filteredCompanies.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={4}
+                                            className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
+                                        >
+                                            No hay resultados para &quot;{tableSearch.trim()}&quot;.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    filteredCompanies.map((row) => (
                                         <tr
                                             key={row.id_company}
-                                            className="border-b border-emerald-900/60 last:border-b-0"
+                                            className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
                                         >
-                                            <td className="py-2 pr-4 align-middle text-emerald-100">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-700 dark:text-emerald-100">
                                                 {row.id_company}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-50">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                 {row.company_name}
                                             </td>
-                                            <td className="py-2 pr-4 align-middle text-emerald-200">
+                                            <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {row.created_at
                                                     ? new Date(row.created_at).toLocaleString()
                                                     : "-"}
                                             </td>
-                                            <td className="py-2 pr-0 align-middle">
+                                            <td className="py-3.5 px-4 align-middle">
                                                 <div className="flex justify-end gap-2">
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="border-emerald-400/60 cursor-pointer"
+                                                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                                                         onClick={() => openEditModal(row)}
                                                     >
                                                         <LuPencil className="h-4 w-4" />
@@ -280,7 +325,7 @@ export default function CompaniesAdminPage() {
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
-                                                        className="border-red-500/60 text-red-400 hover:bg-red-500 hover:text-white cursor-pointer"
+                                                        className="cursor-pointer border-red-200 text-red-600 hover:bg-red-50 dark:border-red-500/60 dark:text-red-400 dark:hover:bg-red-500 dark:hover:text-white"
                                                         onClick={() => openDeleteModal(row)}
                                                     >
                                                         <LuTrash2 className="h-4 w-4" />
@@ -288,17 +333,17 @@ export default function CompaniesAdminPage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </TableScrollArea>
                 </CardContent>
             </Card>
 
             {/* Create modal */}
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <DialogHeader>
                         <DialogTitle>Nueva empresa</DialogTitle>
                         <DialogDescription>
@@ -331,7 +376,7 @@ export default function CompaniesAdminPage() {
                         <Button
                             onClick={handleCreate}
                             disabled={saving}
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                         >
                             {saving ? "Guardando..." : "Crear"}
                         </Button>
@@ -341,7 +386,7 @@ export default function CompaniesAdminPage() {
 
             {/* Edit modal */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                <DialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <DialogHeader>
                         <DialogTitle>Editar empresa</DialogTitle>
                         <DialogDescription>
@@ -373,7 +418,7 @@ export default function CompaniesAdminPage() {
                         <Button
                             onClick={handleUpdate}
                             disabled={saving}
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700"
                         >
                             {saving ? "Guardando..." : "Guardar cambios"}
                         </Button>
@@ -383,12 +428,12 @@ export default function CompaniesAdminPage() {
 
             {/* Delete modal */}
             <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <AlertDialogContent className="bg-emerald-950 border-emerald-800 text-white">
+                <AlertDialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Eliminar empresa</AlertDialogTitle>
                         <AlertDialogDescription>
                             ¿Seguro que deseas eliminar{" "}
-                            <span className="font-mono text-emerald-200">
+                            <span className="font-mono text-zinc-700 dark:text-emerald-200">
                                 {currentCompany?.company_name}
                             </span>
                             ? Esta acción no se puede deshacer.
