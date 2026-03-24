@@ -1,5 +1,5 @@
 export const metadata = {
-    title: "DAIEGO Streaming | Login",
+    title: "Login",
 };
 
 export default function LoginLayout({ children }) {

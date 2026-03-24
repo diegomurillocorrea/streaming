@@ -3,10 +3,18 @@ import { updateSession } from "@/utils/supabase/middleware"
 
 const PUBLIC_ROUTES = ["/login"]
 
-export async function proxy(request) {
-  const { supabaseResponse, user } = await updateSession(request)
+/** Archivos en /public (evita que el proxy redirija a /login y rompa <img src="/logo.png" />). */
+const isPublicStaticFile = (pathname: string) =>
+  /\.(?:ico|png|jpe?g|gif|webp|svg|woff2?|ttf|eot)$/i.test(pathname)
 
+export async function proxy(request) {
   const pathname = request.nextUrl.pathname
+
+  if (isPublicStaticFile(pathname)) {
+    return NextResponse.next()
+  }
+
+  const { supabaseResponse, user } = await updateSession(request)
   const isLoggedIn = !!user
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname)
 

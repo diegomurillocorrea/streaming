@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
@@ -50,6 +51,39 @@ function useUserName() {
   }, [])
 
   return userName
+}
+
+function BrandLogoLink({
+  href,
+  onClick,
+  size = "desktop",
+}: {
+  href: string
+  onClick?: () => void
+  size?: "desktop" | "mobile"
+}) {
+  const textClass = size === "mobile" ? "text-lg" : "text-xl"
+  const imgClass = size === "mobile" ? "h-6 w-6" : "h-8 w-8"
+  const imgPx = size === "mobile" ? 24 : 32
+
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 ${textClass}`}
+      aria-label="DAIEGO Streaming"
+    >
+      <Image
+        src="/DAIEGO.png"
+        alt=""
+        width={imgPx}
+        height={imgPx}
+        className={`${imgClass} shrink-0 object-contain`}
+        unoptimized
+      />
+      <span>Streaming</span>
+    </Link>
+  )
 }
 
 function ThemeToggleButton({
@@ -123,13 +157,7 @@ function NavContent({
     <>
       {!hideLogo && (
         <div className="flex h-16 items-center border-b border-zinc-200/80 px-5 dark:border-zinc-800">
-          <Link
-            href="/administration"
-            onClick={onNavClick}
-            className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
-          >
-            DAIEGO Streaming
-          </Link>
+          <BrandLogoLink href="/administration" onClick={onNavClick} size="desktop" />
         </div>
       )}
 
@@ -199,13 +227,11 @@ export default function AdministrationLayout({
             >
               ☰
             </button>
-            <Link
+            <BrandLogoLink
               href="/administration"
               onClick={closeMobileMenu}
-              className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
-            >
-              DAIEGO Streaming
-            </Link>
+              size="mobile"
+            />
           </div>
           <ThemeToggleButton mobile />
         </header>

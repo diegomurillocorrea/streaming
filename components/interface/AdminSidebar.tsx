@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link"
+import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { usePathname } from "next/navigation"
 import { LuSun } from "react-icons/lu"
@@ -60,10 +61,22 @@ export default function AdminSidebar() {
     return (
         <aside className="h-screen sticky top-0 w-[240px] min-w-[240px] flex flex-col bg-[#0b2a23] border-r border-[#0f3d35]">
             <div className="px-4 py-5 border-b border-[#0f3d35]">
-                <Link href="/" className="inline-block cursor-pointer">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#7ddbbf] hover:text-[#eafff5] transition-colors">
-                        DAIEGO Streaming
-                    </p>
+                <Link
+                    href="/"
+                    className="inline-flex items-center gap-2 cursor-pointer"
+                    aria-label="DAIEGO Streaming — Inicio"
+                >
+                    <Image
+                        src="/DAIEGO.png"
+                        alt=""
+                        width={28}
+                        height={28}
+                        className="h-7 w-7 shrink-0 object-contain"
+                        unoptimized
+                    />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[#7ddbbf] hover:text-[#eafff5] transition-colors">
+                        Streaming
+                    </span>
                 </Link>
                 <p className="text-sm text-[#d1fae5] mt-1">Administración</p>
             </div>

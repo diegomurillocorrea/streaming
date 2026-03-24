@@ -1,5 +1,7 @@
 "use client"
 
+import Image from "next/image"
+
 export function Footer() {
   return (
     <footer
@@ -7,8 +9,15 @@ export function Footer() {
       role="contentinfo"
       aria-label="Pie de página"
     >
-      <span className="text-sm font-medium">
-        DAIEGO SyS
+      <span className="inline-flex items-center gap-2 text-sm font-medium">
+        <Image
+          src="/DAIEGO.png"
+          alt="DAIEGO"
+          width={28}
+          height={28}
+          className="h-7 w-7 shrink-0 object-contain"
+          unoptimized
+        />
       </span>
       <span className="text-sm font-medium" aria-label="DAIEGO LLC copyright 2026">
         DAIEGO LLC © 2026

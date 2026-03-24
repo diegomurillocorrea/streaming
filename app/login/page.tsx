@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useState } from "react"
+import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useTheme } from "@/hooks/use-theme"
@@ -76,8 +77,17 @@ function LoginForm() {
         </button>
         <main className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-8 shadow-lg dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-xl tablet:p-10">
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
-              DAIEGO Streaming
+            <h1 className="flex flex-wrap items-center justify-center gap-2 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:gap-2.5 tablet:text-3xl">
+              <Image
+                src="/DAIEGO.png"
+                alt="DAIEGO"
+                width={44}
+                height={44}
+                className="h-9 w-9 shrink-0 object-contain tablet:h-11 tablet:w-11"
+                priority
+                unoptimized
+              />
+              <span>Streaming</span>
             </h1>
             <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
               Inicia sesión en tu cuenta
@@ -187,8 +197,17 @@ function LoginFallback() {
       <div className="flex flex-1 flex-col items-center justify-center px-4">
         <main className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-8 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              DAIEGO Streaming
+            <h1 className="flex flex-wrap items-center justify-center gap-2 text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              <Image
+                src="/DAIEGO.png"
+                alt="DAIEGO"
+                width={44}
+                height={44}
+                className="h-9 w-9 shrink-0 object-contain"
+                priority
+                unoptimized
+              />
+              <span>Streaming</span>
             </h1>
             <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
               Cargando…
