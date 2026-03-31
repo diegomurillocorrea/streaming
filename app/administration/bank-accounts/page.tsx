@@ -34,7 +34,7 @@ import {
     AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 
-import { LuPlus, LuPencil, LuTrash2, LuRefreshCw } from "react-icons/lu";
+import { LuPlus, LuPencil, LuTrash2, LuRefreshCw, LuCopy } from "react-icons/lu";
 
 import { TableScrollArea } from "@/components/admin/table-scroll-area";
 import { TableSearchInput } from "@/components/admin/table-search-input";
@@ -118,6 +118,21 @@ export default function BankAccountsAdminPage() {
         const str = String(value).replace(/\s+/g, "");
         if (str.length <= 4) return str;
         return `••••••${str.slice(-4)}`;
+    };
+
+    const handleCopyAccountDetails = async (row) => {
+        const copyText = `Banco: ${row.bank_name || "-"}
+Nombre de cuenta: ${row.account_name || "-"}
+Numero de cuenta: ${row.account_number || "-"}
+Tipo de cuenta: Ahorro`;
+
+        try {
+            await navigator.clipboard.writeText(copyText);
+            setGlobalError("");
+        } catch (error) {
+            console.error(error);
+            setGlobalError("No se pudo copiar la información de la cuenta.");
+        }
     };
 
     // ---------- Create ----------
@@ -363,6 +378,16 @@ export default function BankAccountsAdminPage() {
                                             </td>
                                             <td className="py-3.5 px-4 align-middle">
                                                 <div className="flex justify-end gap-2">
+                                                    <Button
+                                                        size="icon"
+                                                        variant="outline"
+                                                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
+                                                        onClick={() => handleCopyAccountDetails(row)}
+                                                        aria-label="Copiar información de la cuenta"
+                                                        title="Copiar"
+                                                    >
+                                                        <LuCopy className="h-4 w-4" />
+                                                    </Button>
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
