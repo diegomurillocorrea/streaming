@@ -109,7 +109,10 @@ const STAT_CONFIG: {
 export default function AdministrationDashboardPage() {
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS)
   const [loading, setLoading] = useState(true)
+  const [hasMounted, setHasMounted] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+
+  const isLoadingUi = !hasMounted || loading
 
   const loadStats = useCallback(async () => {
     setLoading(true)
@@ -169,6 +172,7 @@ export default function AdministrationDashboardPage() {
   }, [])
 
   useEffect(() => {
+    setHasMounted(true)
     void loadStats()
   }, [loadStats])
 
@@ -208,12 +212,12 @@ export default function AdministrationDashboardPage() {
             variant="outline"
             size="sm"
             onClick={() => void loadStats()}
-            disabled={loading}
+            disabled={hasMounted && loading}
             className="gap-2"
             aria-label="Actualizar métricas"
           >
             <RefreshCw
-              className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+              className={`h-4 w-4 ${isLoadingUi ? "animate-spin" : ""}`}
               aria-hidden
             />
             Actualizar
@@ -228,7 +232,7 @@ export default function AdministrationDashboardPage() {
 
         <div
           className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-          aria-busy={loading}
+          aria-busy={isLoadingUi}
           aria-live="polite"
         >
           {STAT_CONFIG.map(({ key, label, icon: Icon }) => (
@@ -247,7 +251,7 @@ export default function AdministrationDashboardPage() {
                   />
                 </div>
                 <CardTitle className="text-3xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
-                  {loading ? (
+                  {isLoadingUi ? (
                     <span className="inline-block h-9 w-16 animate-pulse rounded-md bg-zinc-200 dark:bg-zinc-700" />
                   ) : (
                     stats[key].toLocaleString("es")

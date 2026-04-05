@@ -68,6 +68,7 @@ export function AddClientButton({
       id_account: accountId,
       id_client: idNum,
       service_start_date: today,
+      subscription_started_at: today,
       period_in_months: 1,
       service_end_date: null,
     })
