@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client"
 
 const NAV_ITEMS = [
   { href: "/administration", label: "Dashboard" },
+  { href: "/administration/monthly-finance", label: "Finanzas del mes" },
   { href: "/administration/accounts", label: "Cuentas" },
   { href: "/administration/clients", label: "Clientes" },
   { href: "/administration/companies", label: "Empresas" },

@@ -14,6 +14,7 @@ import {
   Users,
   Wallet,
   Link2,
+  PiggyBank,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -53,6 +54,12 @@ const QUICK_LINKS: {
   description: string
   icon: typeof Radio
 }[] = [
+  {
+    href: "/administration/monthly-finance",
+    label: "Finanzas del mes",
+    description: "Cobros, pendientes y resultado por mes",
+    icon: PiggyBank,
+  },
   {
     href: "/administration/accounts",
     label: "Cuentas",
