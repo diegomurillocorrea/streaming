@@ -58,6 +58,8 @@ export default function CompaniesAdminPage() {
 
     const [currentCompany, setCurrentCompany] = useState(null);
     const [formCompanyName, setFormCompanyName] = useState("");
+    const [formMembershipMonthlyCost, setFormMembershipMonthlyCost] =
+        useState("");
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
@@ -67,7 +69,14 @@ export default function CompaniesAdminPage() {
         if (!tableSearch.trim()) return companies;
         return companies.filter((row) =>
             rowMatchesSearch(
-                [row.id_company, row.company_name, row.created_at],
+                [
+                    row.id_company,
+                    row.company_name,
+                    row.created_at,
+                    row.membership_monthly_cost != null
+                        ? String(row.membership_monthly_cost)
+                        : "",
+                ],
                 tableSearch
             )
         );
@@ -99,8 +108,16 @@ export default function CompaniesAdminPage() {
     }, []);
 
     // Create
+    const parseMembershipMonthlyCostInput = (raw) => {
+        const t = String(raw ?? "").trim();
+        if (t === "") return null;
+        const n = Number.parseFloat(t);
+        return Number.isNaN(n) ? null : n;
+    };
+
     const openCreateModal = () => {
         setFormCompanyName("");
+        setFormMembershipMonthlyCost("");
         setCurrentCompany(null);
         setCreateOpen(true);
     };
@@ -116,7 +133,11 @@ export default function CompaniesAdminPage() {
 
         const { data, error } = await supabase
             .from("companies")
-            .insert({ company_name: formCompanyName.trim() })
+            .insert({
+                company_name: formCompanyName.trim(),
+                membership_monthly_cost:
+                    parseMembershipMonthlyCostInput(formMembershipMonthlyCost),
+            })
             .select()
             .single();
 
@@ -136,6 +157,12 @@ export default function CompaniesAdminPage() {
     const openEditModal = (row) => {
         setCurrentCompany(row);
         setFormCompanyName(row.company_name || "");
+        setFormMembershipMonthlyCost(
+            row.membership_monthly_cost !== null &&
+                row.membership_monthly_cost !== undefined
+                ? String(row.membership_monthly_cost)
+                : ""
+        );
         setEditOpen(true);
     };
 
@@ -152,7 +179,11 @@ export default function CompaniesAdminPage() {
 
         const { data, error } = await supabase
             .from("companies")
-            .update({ company_name: formCompanyName.trim() })
+            .update({
+                company_name: formCompanyName.trim(),
+                membership_monthly_cost:
+                    parseMembershipMonthlyCostInput(formMembershipMonthlyCost),
+            })
             .eq("id_company", currentCompany.id_company)
             .select()
             .single();
@@ -253,7 +284,7 @@ export default function CompaniesAdminPage() {
                         id="companies-table-search"
                         value={tableSearch}
                         onChange={setTableSearch}
-                        placeholder="Buscar por ID o nombre de empresa…"
+                        placeholder="Buscar por ID, nombre o costo membresía…"
                         aria-label="Buscar en la lista de empresas"
                     />
                     <TableScrollArea>
@@ -262,6 +293,9 @@ export default function CompaniesAdminPage() {
                                 <tr className="text-left text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-300">
                                     <th className="py-3.5 px-4">ID</th>
                                     <th className="py-3.5 px-4">Nombre de empresa</th>
+                                    <th className="py-3.5 px-4 text-right">
+                                        Costo membresía
+                                    </th>
                                     <th className="py-3.5 px-4">Creado el</th>
                                     <th className="py-3.5 px-4 text-right">Acciones</th>
                                 </tr>
@@ -270,7 +304,7 @@ export default function CompaniesAdminPage() {
                                 {loading ? (
                                     <tr>
                                         <td
-                                            colSpan={4}
+                                            colSpan={5}
                                             className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
                                         >
                                             Cargando empresas...
@@ -279,7 +313,7 @@ export default function CompaniesAdminPage() {
                                 ) : companies.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={4}
+                                            colSpan={5}
                                             className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
                                         >
                                             No se encontraron empresas. Haz clic en &quot;Nueva
@@ -289,7 +323,7 @@ export default function CompaniesAdminPage() {
                                 ) : filteredCompanies.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={4}
+                                            colSpan={5}
                                             className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300"
                                         >
                                             No hay resultados para &quot;{tableSearch.trim()}&quot;.
@@ -306,6 +340,16 @@ export default function CompaniesAdminPage() {
                                             </td>
                                             <td className="py-3.5 px-4 align-middle text-zinc-900 dark:text-emerald-50">
                                                 {row.company_name}
+                                            </td>
+                                            <td className="py-3.5 px-4 align-middle text-right text-zinc-600 dark:text-emerald-200">
+                                                {row.membership_monthly_cost !==
+                                                    null &&
+                                                row.membership_monthly_cost !==
+                                                    undefined
+                                                    ? `$${Number(
+                                                          row.membership_monthly_cost
+                                                      ).toFixed(2)}`
+                                                    : "-"}
                                             </td>
                                             <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                                                 {row.created_at
@@ -363,6 +407,35 @@ export default function CompaniesAdminPage() {
                                 disabled={saving}
                             />
                         </div>
+                        <div className="space-y-1">
+                            <Label htmlFor="new-membership-cost">
+                                Costo membresía (mensual)
+                            </Label>
+                            <p
+                                id="new-membership-cost-hint"
+                                className="text-xs text-zinc-500 dark:text-emerald-400"
+                            >
+                                Lo que cuesta comprar la membresía mensual en la plataforma.
+                            </p>
+                            <div className="flex items-center gap-1">
+                                <span className="text-sm text-zinc-600 dark:text-emerald-200">
+                                    $
+                                </span>
+                                <Input
+                                    id="new-membership-cost"
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={formMembershipMonthlyCost}
+                                    onChange={(e) =>
+                                        setFormMembershipMonthlyCost(e.target.value)
+                                    }
+                                    disabled={saving}
+                                    aria-describedby="new-membership-cost-hint"
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     <DialogFooter>
@@ -404,6 +477,35 @@ export default function CompaniesAdminPage() {
                                 onChange={(e) => setFormCompanyName(e.target.value)}
                                 disabled={saving}
                             />
+                        </div>
+                        <div className="space-y-1">
+                            <Label htmlFor="edit-membership-cost">
+                                Costo membresía (mensual)
+                            </Label>
+                            <p
+                                id="edit-membership-cost-hint"
+                                className="text-xs text-zinc-500 dark:text-emerald-400"
+                            >
+                                Lo que cuesta comprar la membresía mensual en la plataforma.
+                            </p>
+                            <div className="flex items-center gap-1">
+                                <span className="text-sm text-zinc-600 dark:text-emerald-200">
+                                    $
+                                </span>
+                                <Input
+                                    id="edit-membership-cost"
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={formMembershipMonthlyCost}
+                                    onChange={(e) =>
+                                        setFormMembershipMonthlyCost(e.target.value)
+                                    }
+                                    disabled={saving}
+                                    aria-describedby="edit-membership-cost-hint"
+                                />
+                            </div>
                         </div>
                     </div>
 

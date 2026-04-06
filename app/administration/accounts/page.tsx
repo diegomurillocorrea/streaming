@@ -47,6 +47,45 @@ import { TableSearchInput } from "@/components/admin/table-search-input";
 import { canAccessAccountSubscriptionsPage } from "@/lib/account-subscriptions-access";
 import { rowMatchesSearch } from "@/lib/table-search";
 
+/**
+ * Orden de filas en Cuentas por servicio (coincidencia en `company_name`).
+ * 1 Disney → 2 Prime Video → 3 Netflix → 4 Crunchyroll → 5 Spotify → 6 Gmail; resto al final.
+ */
+const ACCOUNT_TABLE_SERVICE_ORDER = [
+  "disney",
+  "prime video",
+  "netflix",
+  "crunchyroll",
+  "spotify",
+  "gmail",
+] as const;
+
+function getCompanyNameFromAccount(acc) {
+  return (
+    (Array.isArray(acc.companies)
+      ? acc.companies[0]?.company_name
+      : acc.companies?.company_name) ?? ""
+  );
+}
+
+function getCompanyMembershipMonthlyCostFromAccount(acc) {
+  const co = Array.isArray(acc.companies)
+    ? acc.companies[0]
+    : acc.companies;
+  const v = co?.membership_monthly_cost;
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+}
+
+function getAccountCompanySortRank(companyName: string) {
+  const n = companyName.trim().toLowerCase();
+  for (let i = 0; i < ACCOUNT_TABLE_SERVICE_ORDER.length; i++) {
+    if (n.includes(ACCOUNT_TABLE_SERVICE_ORDER[i])) return i;
+  }
+  return ACCOUNT_TABLE_SERVICE_ORDER.length;
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return "-";
   const d = new Date(dateStr);
@@ -79,13 +118,22 @@ export default function AdminAccountsPage() {
     setHasMounted(true);
   }, []);
 
+  const sortedAccounts = useMemo(() => {
+    return [...accounts].sort((a, b) => {
+      const rankA = getAccountCompanySortRank(getCompanyNameFromAccount(a));
+      const rankB = getAccountCompanySortRank(getCompanyNameFromAccount(b));
+      if (rankA !== rankB) return rankA - rankB;
+      const idA = a.id_account ?? 0;
+      const idB = b.id_account ?? 0;
+      return idA - idB;
+    });
+  }, [accounts]);
+
   const filteredAccounts = useMemo(() => {
-    if (!tableSearch.trim()) return accounts;
-    return accounts.filter((acc) => {
-      const companyName =
-        (Array.isArray(acc.companies)
-          ? acc.companies[0]?.company_name
-          : acc.companies?.company_name) ?? "";
+    if (!tableSearch.trim()) return sortedAccounts;
+    return sortedAccounts.filter((acc) => {
+      const companyName = getCompanyNameFromAccount(acc);
+      const membershipCost = getCompanyMembershipMonthlyCostFromAccount(acc);
       const emailAddr =
         (Array.isArray(acc.emails)
           ? acc.emails[0]?.email_address
@@ -97,12 +145,15 @@ export default function AdminAccountsPage() {
           companyName,
           emailAddr,
           acc.payment_date,
-          acc.price != null ? String(acc.price) : "",
+          membershipCost != null ? String(membershipCost) : "",
+          acc.account_price_by_client != null
+            ? String(acc.account_price_by_client)
+            : "",
         ],
         tableSearch
       );
     });
-  }, [accounts, tableSearch]);
+  }, [sortedAccounts, tableSearch]);
 
   // formulario compartido para crear / editar
   const [form, setForm] = useState({
@@ -111,7 +162,7 @@ export default function AdminAccountsPage() {
     id_email: "",
     password: "",
     payment_date: "",
-    price: "",
+    account_price_by_client: "",
     pin_included: true,
   });
 
@@ -135,10 +186,11 @@ export default function AdminAccountsPage() {
           account_name,
           payment_date,
           created_at,
-          price,
+          account_price_by_client,
           pin_included,
           companies (
-            company_name
+            company_name,
+            membership_monthly_cost
           ),
           emails (
             email_address
@@ -148,7 +200,7 @@ export default function AdminAccountsPage() {
         .order("id_account", { ascending: true }),
       supabase
         .from("companies")
-        .select("id_company, company_name")
+        .select("id_company, company_name, membership_monthly_cost")
         .order("company_name", { ascending: true }),
       supabase
         .from("emails")
@@ -182,7 +234,7 @@ export default function AdminAccountsPage() {
       id_email: "",
       password: "",
       payment_date: "",
-      price: "",
+      account_price_by_client: "",
       pin_included: true,
     });
     setIsDialogOpen(true);
@@ -196,9 +248,10 @@ export default function AdminAccountsPage() {
       id_email: account.id_email ? String(account.id_email) : "",
       password: account.password ?? "",
       payment_date: account.payment_date ?? "",
-      price:
-        account.price !== null && account.price !== undefined
-          ? String(account.price)
+      account_price_by_client:
+        account.account_price_by_client !== null &&
+        account.account_price_by_client !== undefined
+          ? String(account.account_price_by_client)
           : "",
       pin_included:
         account.pin_included === null || account.pin_included === undefined
@@ -219,10 +272,11 @@ export default function AdminAccountsPage() {
       id_email: form.id_email ? Number(form.id_email) : null,
       password: form.password || "",
       payment_date: form.payment_date || null,
-      price:
-        form.price === "" || form.price === null
+      account_price_by_client:
+        form.account_price_by_client === "" ||
+        form.account_price_by_client === null
           ? null
-          : Number.parseFloat(form.price),
+          : Number.parseFloat(form.account_price_by_client),
       pin_included: Boolean(form.pin_included),
     };
 
@@ -317,7 +371,7 @@ export default function AdminAccountsPage() {
             id="accounts-table-search"
             value={tableSearch}
             onChange={setTableSearch}
-            placeholder="Buscar por ID, cuenta, servicio, email o precio…"
+            placeholder="Buscar por ID, cuenta, servicio, email, costo o precio al cliente…"
             aria-label="Buscar en la lista de cuentas"
           />
           <TableScrollArea>
@@ -329,31 +383,40 @@ export default function AdminAccountsPage() {
                   <th className="py-3.5 px-4">Servicio</th>
                   <th className="py-3.5 px-4">Email</th>
                   <th className="py-3.5 px-4">Día de pago</th>
-                  <th className="py-3.5 px-4 text-right">Precio</th>
+                  <th
+                    className="py-3.5 px-4 text-right"
+                    title="Definido en Empresas por servicio"
+                  >
+                    Costo membresía
+                  </th>
+                  <th className="py-3.5 px-4 text-right">Precio al cliente</th>
                   <th className="py-3.5 px-4 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
+                    <td colSpan={8} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
                       Cargando cuentas...
                     </td>
                   </tr>
                 ) : accounts.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
+                    <td colSpan={8} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
                       Aún no hay cuentas. Haz clic en &quot;Nueva cuenta&quot; para agregar la primera.
                     </td>
                   </tr>
                 ) : filteredAccounts.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
+                    <td colSpan={8} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
                       No hay resultados para &quot;{tableSearch.trim()}&quot;.
                     </td>
                   </tr>
                 ) : (
-                  filteredAccounts.map((acc) => (
+                  filteredAccounts.map((acc) => {
+                    const rowMembershipCost =
+                      getCompanyMembershipMonthlyCostFromAccount(acc);
+                    return (
                     <tr
                       key={acc.id_account}
                       className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
@@ -374,8 +437,8 @@ export default function AdminAccountsPage() {
                           ) : (
                             <span
                               className="font-medium text-zinc-600 dark:text-emerald-200/90"
-                              title="Configura día de pago y precio en esta cuenta para abrir suscripciones"
-                              aria-label={`${acc.account_name}: completa día de pago y precio para ver suscripciones`}
+                              title="Configura día de pago y precio al cliente en esta cuenta para abrir suscripciones"
+                              aria-label={`${acc.account_name}: completa día de pago y precio al cliente para ver suscripciones`}
                             >
                               {acc.account_name}
                             </span>
@@ -398,7 +461,15 @@ export default function AdminAccountsPage() {
                         {acc.payment_date ? formatDate(acc.payment_date) : "-"}
                       </td>
                       <td className="py-3.5 px-4 align-middle text-right text-zinc-600 dark:text-emerald-200">
-                        {acc.price !== null && acc.price !== undefined ? `$${acc.price.toFixed(2)}` : "-"}
+                        {rowMembershipCost != null
+                          ? `$${rowMembershipCost.toFixed(2)}`
+                          : "-"}
+                      </td>
+                      <td className="py-3.5 px-4 align-middle text-right text-zinc-600 dark:text-emerald-200">
+                        {acc.account_price_by_client !== null &&
+                        acc.account_price_by_client !== undefined
+                          ? `$${Number(acc.account_price_by_client).toFixed(2)}`
+                          : "-"}
                       </td>
                       <td className="py-3.5 px-4 align-middle">
                         <div className="flex justify-end gap-2">
@@ -421,7 +492,8 @@ export default function AdminAccountsPage() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                  );
+                  })
                 )}
               </tbody>
             </table>
@@ -439,7 +511,7 @@ export default function AdminAccountsPage() {
               <DialogDescription>
                 {editingAccount
                   ? "Actualiza la información de esta cuenta de streaming."
-                  : "Crea una nueva cuenta de streaming y define su precio."}
+                  : "Crea una nueva cuenta. El costo de membresía del servicio se define en Empresas."}
               </DialogDescription>
             </DialogHeader>
 
@@ -482,6 +554,16 @@ export default function AdminAccountsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-zinc-500 dark:text-emerald-400">
+                    El costo de membresía mensual del servicio se edita en{" "}
+                    <Link
+                      href="/administration/companies"
+                      className="font-medium text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300"
+                    >
+                      Empresas
+                    </Link>
+                    .
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -553,7 +635,7 @@ export default function AdminAccountsPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="payment_date">Día de pago</Label>
                   <Input
                     id="payment_date"
@@ -568,22 +650,31 @@ export default function AdminAccountsPage() {
                   />
                 </div>
 
-                {/* 🆕 Campo PRICE */}
-                <div className="space-y-2">
-                  <Label htmlFor="price">Precio</Label>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="account_price_by_client">Precio al cliente</Label>
+                  <p
+                    id="account_price_by_client_desc"
+                    className="text-xs text-zinc-500 dark:text-emerald-400"
+                  >
+                    Monto que cada cliente debe pagar por su cupo.
+                  </p>
                   <div className="flex items-center gap-1">
                     <span className="text-sm text-zinc-600 dark:text-emerald-200">$</span>
                     <Input
-                      id="price"
+                      id="account_price_by_client"
                       type="number"
                       min={0}
                       step="0.01"
-                      value={form.price}
+                      value={form.account_price_by_client}
                       onChange={(e) =>
-                        setForm((prev) => ({ ...prev, price: e.target.value }))
+                        setForm((prev) => ({
+                          ...prev,
+                          account_price_by_client: e.target.value,
+                        }))
                       }
                       className="border-zinc-200 bg-white text-sm text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700 dark:text-emerald-50"
                       placeholder="0.00"
+                      aria-describedby="account_price_by_client_desc"
                     />
                   </div>
                 </div>

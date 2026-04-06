@@ -39,7 +39,7 @@ export async function generateMetadata({
   const supabase = await createServerClient()
   const { data, error } = await supabase
     .from("accounts")
-    .select("account_name, payment_date, price")
+    .select("account_name, payment_date, account_price_by_client")
     .eq("id_account", accountId)
     .maybeSingle()
 
@@ -48,7 +48,7 @@ export async function generateMetadata({
   }
 
   if (accountLacksPaymentDayAndPrice(data)) {
-    return { title: "Día de pago y precio requeridos" }
+    return { title: "Día de pago y precio al cliente requeridos" }
   }
 
   const accountLabel =
@@ -158,7 +158,7 @@ export default async function AccountSubscriptionsPage({
           id_account,
           account_name,
           payment_date,
-          price,
+          account_price_by_client,
           companies (
             company_name
           ),
@@ -196,9 +196,9 @@ export default async function AccountSubscriptionsPage({
         account_name,
         password,
         payment_date,
-        price,
+        account_price_by_client,
         pin_included,
-        companies ( company_name ),
+        companies ( company_name, membership_monthly_cost ),
         emails ( email_address )
       `
       )
@@ -252,7 +252,7 @@ export default async function AccountSubscriptionsPage({
           <span className="font-medium text-zinc-900 dark:text-emerald-100">
             {label}
           </span>{" "}
-          no tiene día de pago ni precio. Configura ambos en{" "}
+          no tiene día de pago ni precio al cliente. Configura ambos en{" "}
           <strong className="font-semibold">Cuentas</strong> para gestionar
           suscripciones y pagos.
         </p>
@@ -293,8 +293,16 @@ export default async function AccountSubscriptionsPage({
   const accountPassword = accountInfo?.password ?? ""
   const accountPaymentDay = accountInfo?.payment_date ?? null
   const accountPrice =
-    accountInfo?.price !== null && accountInfo?.price !== undefined
-      ? Number(accountInfo.price)
+    accountInfo?.account_price_by_client !== null &&
+    accountInfo?.account_price_by_client !== undefined
+      ? Number(accountInfo.account_price_by_client)
+      : null
+
+  const membershipMonthlyCostRaw = accountCompany?.membership_monthly_cost
+  const accountCost =
+    membershipMonthlyCostRaw !== null &&
+    membershipMonthlyCostRaw !== undefined
+      ? Number(membershipMonthlyCostRaw)
       : null
 
   const pinIncluded =
@@ -412,9 +420,19 @@ export default async function AccountSubscriptionsPage({
                 {formatHeaderDate(accountPaymentDay)}
               </p>
             )}
+            {accountCost !== null && !Number.isNaN(accountCost) && (
+              <p className="text-xs">
+                <span className="text-zinc-500 dark:text-emerald-400">
+                  Costo membresía (compra mensual):
+                </span>{" "}
+                <span className="font-medium text-zinc-900 dark:text-emerald-50">
+                  ${accountCost.toFixed(2)}
+                </span>
+              </p>
+            )}
             {accountPrice !== null && !Number.isNaN(accountPrice) && (
               <p className="text-xs">
-                <span className="text-zinc-500 dark:text-emerald-400">Precio de referencia:</span>{" "}
+                <span className="text-zinc-500 dark:text-emerald-400">Precio al cliente:</span>{" "}
                 <span className="font-medium text-zinc-900 dark:text-emerald-50">
                   ${accountPrice.toFixed(2)}
                 </span>{" "}

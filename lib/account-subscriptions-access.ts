@@ -4,17 +4,19 @@
  */
 export function accountLacksPaymentDayAndPrice(acc: {
   payment_date?: string | null
-  price?: number | null
+  account_price_by_client?: number | null
 }) {
   const noPaymentDay =
     !acc.payment_date || String(acc.payment_date).trim() === ""
-  const noPrice = acc.price === null || acc.price === undefined
+  const noPrice =
+    acc.account_price_by_client === null ||
+    acc.account_price_by_client === undefined
   return noPaymentDay && noPrice
 }
 
 export function canAccessAccountSubscriptionsPage(acc: {
   payment_date?: string | null
-  price?: number | null
+  account_price_by_client?: number | null
 }) {
   return !accountLacksPaymentDayAndPrice(acc)
 }

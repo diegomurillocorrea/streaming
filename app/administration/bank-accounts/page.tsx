@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
@@ -62,6 +63,13 @@ export default function BankAccountsAdminPage() {
     const [deleting, setDeleting] = useState(false);
 
     const [tableSearch, setTableSearch] = useState("");
+
+    /** Evita mismatch de hidratación SSR/cliente en el botón Actualizar (disabled / spinner). */
+    const [hasMounted, setHasMounted] = useState(false);
+
+    useEffect(() => {
+        setHasMounted(true);
+    }, []);
 
     const filteredBankAccounts = useMemo(() => {
         if (!tableSearch.trim()) return accounts;
@@ -276,11 +284,26 @@ Tipo de cuenta: Ahorro`;
                         size="icon"
                         className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
                         onClick={loadAccounts}
-                        disabled={isTableLoading}
+                        disabled={hasMounted && isTableLoading}
                     >
                         <LuRefreshCw
-                            className={`h-4 w-4 ${isTableLoading ? "animate-spin" : ""}`}
+                            className={`h-4 w-4 ${hasMounted && isTableLoading ? "animate-spin" : ""}`}
                         />
+                    </Button>
+
+                    <Button
+                        variant="outline"
+                        className="cursor-pointer border-zinc-300 hover:bg-zinc-50 dark:border-emerald-400/60"
+                        asChild
+                    >
+                        <Link
+                            href="/administration/bank-accounts/share"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Abrir la vista pública para clientes en una pestaña nueva"
+                        >
+                            Vista para clientes
+                        </Link>
                     </Button>
 
                     <Button

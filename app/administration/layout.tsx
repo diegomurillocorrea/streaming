@@ -98,10 +98,12 @@ function ThemeToggleButton({
       <button
         type="button"
         onClick={toggleTheme}
-        className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:ring-offset-zinc-900"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-zinc-50/80 text-zinc-700 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-200 dark:hover:border-zinc-500 dark:hover:bg-zinc-700 dark:hover:text-white dark:focus:ring-offset-zinc-900"
         aria-label={theme === "light" ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
       >
-        {theme === "light" ? "🌙" : "☀️"}
+        <span className="text-lg leading-none" aria-hidden>
+          {theme === "light" ? "🌙" : "☀️"}
+        </span>
       </button>
     )
   }
@@ -110,11 +112,43 @@ function ThemeToggleButton({
     <button
       type="button"
       onClick={toggleTheme}
-      className="w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-zinc-600 transition-all duration-200 hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-50 dark:focus:ring-offset-zinc-900"
+      className="inline-flex w-full items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50/90 px-4 py-3 text-left text-sm font-medium text-zinc-800 shadow-sm transition-all duration-200 hover:border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:border-zinc-600 dark:bg-zinc-800/90 dark:text-zinc-100 dark:hover:border-zinc-500 dark:hover:bg-zinc-700/90 dark:hover:text-white dark:focus:ring-offset-zinc-900"
       aria-label={theme === "light" ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
     >
-      {theme === "light" ? "Modo oscuro" : "Modo claro"}
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-base shadow-sm dark:bg-zinc-900 dark:shadow-none">
+        {theme === "light" ? "🌙" : "☀️"}
+      </span>
+      <span>{theme === "light" ? "Modo oscuro" : "Modo claro"}</span>
     </button>
+  )
+}
+
+function BankAccountsSharePublicChrome({
+  children,
+  isMobile,
+}: {
+  children: React.ReactNode
+  isMobile: boolean
+}) {
+  return (
+    <div className="fixed inset-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-950">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-zinc-200/80 bg-white/95 px-4 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/95">
+        <BrandLogoLink
+          href="/administration/bank-accounts/share"
+          size={isMobile ? "mobile" : "desktop"}
+        />
+        {/* Icono compacto: el modo escritorio del toggle es para el sidebar ancho */}
+        <ThemeToggleButton mobile />
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-6 md:py-8">
+          {children}
+        </div>
+      </div>
+      <div className="shrink-0">
+        <Footer />
+      </div>
+    </div>
   )
 }
 
@@ -212,6 +246,17 @@ export default function AdministrationLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), [])
+
+  const isBankAccountsShareRoute =
+    pathname?.startsWith("/administration/bank-accounts/share") ?? false
+
+  if (isBankAccountsShareRoute) {
+    return (
+      <BankAccountsSharePublicChrome isMobile={isMobile}>
+        {children}
+      </BankAccountsSharePublicChrome>
+    )
+  }
 
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-white dark:bg-zinc-950">
