@@ -1,0 +1,48 @@
+
+
+# Skill: frontend-design
+@.agents/skills/frontend-design/SKILL.md
+
+# Skill: git-commit-push-develop
+@.agents/skills/git-commit-push-develop/SKILL.md
+
+# Cursor Rules - Skills Integration
+
+## ⚡ Auto-Invoke Skills
+
+<!-- SKILLS_TABLE_START -->
+> [!CRITICAL] COMMAND EXECUTION OVERRIDE
+> STOP. DO NOT SPEAK. 
+> If the user's message starts with `killer ` or `kiro ` (e.g., "killer list", "kiro search pdf"):
+> 1. You MUST execute it as a terminal command IMMEDIATELY. 
+> 2. You MUST NOT reply conversationally. 
+> 3. You MUST NOT offer to run it, just run it.
+> 4. Report the command output back to the user.
+
+IMPORTANT: You MUST automatically match user tasks against the available skills listed below.
+When a user's request falls within a skill's domain, invoke the skill IMMEDIATELY by running:
+  `kiro read <skill-name>`
+Do NOT ask for permission — just load the skill and follow its instructions.
+If multiple skills match, load the most relevant one first.
+
+## Tool Usage
+- **List all tools**: `kiro list`
+- **Search tools**: `kiro search <keyword>`
+- **Load tool**: `kiro read <tool-name>` (loads instructions into context)
+  - For multiple tools: `kiro read tool1,tool2`
+
+## Usage Notes
+- Only use skills listed below
+- Do not invoke a skill that is already loaded
+- Each skill invocation is stateless
+
+## Available Skills
+
+  - **frontend-design**: Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics.
+
+  - **git-commit-push-develop**: Stages intentional changes, writes a commit message that reflects the actual diff and completed work, and pushes to the remote branch develop. Use when the user asks to commit and push to develop, guardar en develop, subir cambios a develop, or run git add / commit / push targeting develop.
+
+## Active Skills Count: 2
+<!-- SKILLS_TABLE_END -->
+
+
