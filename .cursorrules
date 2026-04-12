@@ -40,7 +40,7 @@ If multiple skills match, load the most relevant one first.
 
   - **frontend-design**: Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics.
 
-  - **git-commit-push-develop**: Stages intentional changes, writes a commit message that reflects the actual diff and completed work, and pushes to the remote branch develop. Use when the user asks to commit and push to develop, guardar en develop, subir cambios a develop, or run git add / commit / push targeting develop.
+  - **git-commit-push-develop**: Stages intentional changes, writes a commit message with a type-matched leading emoji on the subject line, reflecting the actual diff and completed work, and pushes to the remote branch develop. Use when the user asks to commit and push to develop, guardar en develop, subir cambios a develop, or run git add / commit / push targeting develop.
 
 ## Active Skills Count: 2
 <!-- SKILLS_TABLE_END -->

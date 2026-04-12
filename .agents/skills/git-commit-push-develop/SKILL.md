@@ -1,10 +1,11 @@
 ---
 name: git-commit-push-develop
 description: >-
-  Stages intentional changes, writes a commit message that reflects the actual
-  diff and completed work, and pushes to the remote branch develop. Use when
-  the user asks to commit and push to develop, guardar en develop, subir cambios
-  a develop, or run git add / commit / push targeting develop.
+  Stages intentional changes, writes a commit message (with a type-matched
+  leading emoji on the subject line) that reflects the actual diff and
+  completed work, and pushes to the remote branch develop. Use when the user
+  asks to commit and push to develop, guardar en develop, subir cambios a
+  develop, or run git add / commit / push targeting develop.
 ---
 
 # Git: add, commit (trabajo real) y push a develop
@@ -32,13 +33,37 @@ Si no hay cambios que commitear, detenerse y comunicarlo.
 - Estilo recomendado: [Conventional Commits](https://www.conventionalcommits.org/) en inglés o español, línea corta + cuerpo opcional:
 
   ```
-  tipo(ámbito): resumen imperativo
+  emoji tipo(ámbito): resumen imperativo
 
   - detalle opcional alineado con el diff
   ```
 
 - Tipos habituales: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`.
 - No mensajes genéricos tipo "update" o "cambios" sin sustancia.
+
+### Emoji en la primera línea (dinámico según el tipo)
+
+Colocar **un solo emoji al inicio** del asunto (antes de `tipo(ámbito):`), elegido por la **naturaleza principal del diff**, no al azar. Si el commit mezcla varios tipos, usar el emoji del cambio que más peso tiene.
+
+| Tipo / caso principal | Emoji | Ejemplo de subject |
+|----------------------|-------|---------------------|
+| `feat`, nueva funcionalidad o UX notable | 🚀 | `🚀 feat(billing): exportar facturas en CSV` |
+| `fix`, corrección de bug o regresión | 🐛 | `🐛 fix(auth): restaurar sesión tras refresh` |
+| `test`, tests nuevos o ajuste de cobertura | ✅ | `✅ test(api): casos límite de paginación` |
+| `docs`, README, comentarios de documentación | ✏️ | `✏️ docs: aclarar variables de entorno` |
+| `revert`, rollback, o cambio que deshace algo dañino | ❌ | `❌ revert: deshacer migración que rompía build` |
+| `perf`, optimización clara de rendimiento | ⚡ | `⚡ perf(dashboard): memoizar lista de cuentas` |
+| `refactor`, mismo comportamiento, código más claro | ♻️ | `♻️ refactor(lib): extraer validación de fechas` |
+| `style`, formato / lint sin lógica | 💄 | `💄 style: aplicar prettier en components` |
+| `chore`, deps, tooling, CI sin feat/fix | 🔧 | `🔧 chore: subir eslint a 9.x` |
+
+**Referencia rápida del set aprobado** (elegir **uno** por commit): 🚀 feat · 🐛 fix · ✅ test · ✏️ docs/copy · ❌ revert · ⚡ perf · ♻️ refactor · 💄 style · 🔧 chore.
+
+Reglas:
+
+- **No abusar**: un emoji en la primera línea; el cuerpo del commit puede usar listas con `-` sin emoji extra salvo que aporte claridad.
+- Si el diff es puramente **copy o typos** en UI (no `docs` de repo), puede usarse **✏️** igualmente.
+- Para **breaking change** explícito en el subject (convención `!`), se puede combinar **❌** o **🚀** según sea “rompe API” vs “gran entrega”; por defecto **🚀** si es una feature mayor con `!`.
 
 ## Rama `develop` y push
 
@@ -57,4 +82,4 @@ Si no hay cambios que commitear, detenerse y comunicarlo.
 
 ## Cierre
 
-Confirmar: rama, hash corto del commit, y que el push a `origin/develop` terminó correctamente (o el error concreto de remoto/CI si falla).
+Confirmar: rama, hash corto del commit, **primera línea del mensaje** (con emoji), y que el push a `origin/develop` terminó correctamente (o el error concreto de remoto/CI si falla).
