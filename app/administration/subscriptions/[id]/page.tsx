@@ -1,21 +1,11 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { createClient as createServerClient } from "@/utils/supabase/server"
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card"
+import { AccountSubscriptionsPanel } from "@/components/admin/account-subscriptions-panel"
 import { FinishMonthButton } from "@/components/interface/FinishMonthButton"
 import { CopyAccountCredentialsButton } from "@/components/interface/copy-account-credentials-button"
-import { AccountSubscriptionsTable } from "@/components/admin/account-subscriptions-table"
 import { accountLacksPaymentDayAndPrice } from "@/lib/account-subscriptions-access"
-import {
-  getCurrentMonthKey,
-  monthKeyFromDateOnly,
-} from "@/lib/subscription-dates"
+import type { SubscriptionPayloadRow } from "@/lib/build-subscription-table-rows"
 
 interface AccountSubscriptionsPageProps {
   params: Promise<{ id: string }>
@@ -65,32 +55,6 @@ function formatHeaderDate(dateStr: string | null | undefined) {
     month: "short",
     day: "2-digit",
   }).format(d)
-}
-
-function isPaymentConfirmedForMonth(
-  payment: { paid_month?: string | null; amount?: number | null },
-  currentMonthKey: string,
-  accountPrice: number | null
-) {
-  if (!payment?.paid_month) return false
-  if (monthKeyFromDateOnly(payment.paid_month) !== currentMonthKey) return false
-
-  const amountNum =
-    payment.amount !== null && payment.amount !== undefined
-      ? Number(payment.amount)
-      : 0
-  if (Number.isNaN(amountNum)) return false
-
-  if (accountPrice === null || accountPrice === undefined) {
-    return amountNum > 0
-  }
-
-  const priceNum = Number(accountPrice)
-  if (Number.isNaN(priceNum) || priceNum <= 0) {
-    return amountNum > 0
-  }
-
-  return amountNum >= priceNum
 }
 
 export default async function AccountSubscriptionsPage({
@@ -179,6 +143,8 @@ export default async function AccountSubscriptionsPage({
           amount,
           payment_date,
           paid_month,
+          payment_reference,
+          receipt_storage_path,
           bank_accounts (
             bank_name
           )
@@ -311,75 +277,11 @@ export default async function AccountSubscriptionsPage({
       ? true
       : Boolean(accountInfo.pin_included)
 
-  const currentMonthKey = getCurrentMonthKey()
-
   const linkedClientIds = list
     .map((sub) => sub.id_client)
     .filter((id): id is number => typeof id === "number" && !Number.isNaN(id))
 
-  const rows = list.map((sub) => {
-    const payments = sub.payments || []
-    const client = Array.isArray(sub.clients) ? sub.clients[0] : sub.clients
-
-    const monthsPaid = payments.length
-
-    const sortedPayments = [...payments].sort(
-      (a, b) =>
-        new Date(b.paid_month).getTime() - new Date(a.paid_month).getTime()
-    )
-    const lastPayment = sortedPayments[0]
-
-    const paymentThisMonth = payments.find((p) => {
-      if (!p.paid_month) return false
-      return monthKeyFromDateOnly(p.paid_month) === currentMonthKey
-    })
-
-    const paymentForEdit = paymentThisMonth ?? null
-    const lastPaymentBankData: unknown = paymentForEdit?.bank_accounts
-
-    const isConfirmed = paymentThisMonth
-      ? isPaymentConfirmedForMonth(
-          paymentThisMonth,
-          currentMonthKey,
-          accountPrice
-        )
-      : false
-
-    const status = isConfirmed ? "CONFIRMADO" : "PENDIENTE"
-
-    return {
-      id_subscription: sub.id_subscription,
-      id_client:
-        typeof sub.id_client === "number" && !Number.isNaN(sub.id_client)
-          ? sub.id_client
-          : null,
-      user: sub.user ?? "",
-      pin: sub.pin ?? "",
-      firstName: client?.name ?? "",
-      lastName: client?.lastName ?? "",
-      email: client?.email ?? "-",
-      phone: client?.phoneNumber ?? "-",
-      serviceStartRaw: sub.service_start_date,
-      periodInMonths: sub.period_in_months,
-      monthsPaid,
-      lastPaidMonth: lastPayment?.paid_month ?? null,
-      lastPaymentDate: lastPayment?.payment_date ?? null,
-      lastPaymentAmount: paymentForEdit?.amount ?? null,
-      lastPaymentBank: Array.isArray(lastPaymentBankData)
-        ? lastPaymentBankData[0]?.bank_name ?? null
-        : (lastPaymentBankData as { bank_name?: string } | null)?.bank_name ??
-          null,
-      lastPaymentBankId: paymentForEdit?.id_bank_account ?? null,
-      lastPaymentId: paymentForEdit?.id_payment ?? null,
-      status,
-    }
-  })
-
-  const confirmedCount = rows.filter((r) => r.status === "CONFIRMADO").length
-  const pendingCount = rows.filter((r) => r.status === "PENDIENTE").length
-
-  const MAX_SLOTS = 5
-  const emptySlots = Math.max(MAX_SLOTS - rows.length, 0)
+  const subscriptionsPayload = list as SubscriptionPayloadRow[]
 
   return (
     <main className="mx-auto space-y-6">
@@ -443,69 +345,39 @@ export default async function AccountSubscriptionsPage({
             )}
           </div>
         </div>
-        <div className="shrink-0">
+        <div className="flex max-w-sm shrink-0 flex-col items-end gap-2 text-right">
           <FinishMonthButton accountId={accountId} />
+          <p className="text-xs text-zinc-500 dark:text-emerald-400">
+            Tras cerrar mes las fechas de servicio avanzan; para ver pendientes de
+            un mes pasado (p. ej. abril), elige ese mes en{" "}
+            <strong className="font-medium text-zinc-700 dark:text-emerald-200">
+              Período activo
+            </strong>{" "}
+            arriba.
+          </p>
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-emerald-800 dark:bg-emerald-950/40">
-          <p className="text-xs font-medium text-zinc-500 dark:text-emerald-400">
-            Cupos usados
-          </p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-emerald-50">
-            {rows.length}/{MAX_SLOTS}
-          </p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-emerald-800 dark:bg-emerald-950/40">
-          <p className="text-xs font-medium text-zinc-500 dark:text-emerald-400">
-            Confirmados (mes)
-          </p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
-            {confirmedCount}
-          </p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-emerald-800 dark:bg-emerald-950/40">
-          <p className="text-xs font-medium text-zinc-500 dark:text-emerald-400">
-            Pendientes (mes)
-          </p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-amber-700 dark:text-amber-300">
-            {pendingCount}
-          </p>
-        </div>
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-emerald-800 dark:bg-emerald-950/40">
-          <p className="text-xs font-medium text-zinc-500 dark:text-emerald-400">
-            Cupos libres
-          </p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-emerald-50">
-            {emptySlots}
-          </p>
-        </div>
-      </div>
-
-      <Card className="border border-zinc-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-emerald-900/60">
-        <CardHeader>
-          <CardTitle className="text-base">Clientes y control de pagos</CardTitle>
-          <CardDescription>
-            Edita usuario
-            {pinIncluded ? ", PIN" : ""}, fechas y pagos por fila. Los cambios se guardan al salir
-            de cada campo o al elegir banco. Eliminar una suscripción también elimina sus pagos
-            asociados en base de datos.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <AccountSubscriptionsTable
-            accountId={accountId}
-            rows={rows}
-            emptySlots={emptySlots}
-            clientsList={clientsList ?? []}
-            linkedClientIds={linkedClientIds}
-            bankAccounts={bankAccounts ?? []}
-            accountPrice={accountPrice}
-            pinIncluded={pinIncluded}
-          />
-        </CardContent>
-      </Card>
+      <AccountSubscriptionsPanel
+        accountId={accountId}
+        subscriptionsPayload={subscriptionsPayload}
+        clientsList={
+          (clientsList ?? []).map((c) => ({
+            id_client: c.id_client,
+            name: c.name ?? "",
+            lastName: c.lastName ?? "",
+            email: c.email ?? null,
+            phoneNumber: c.phoneNumber ?? null,
+          }))
+        }
+        linkedClientIds={linkedClientIds}
+        bankAccounts={(bankAccounts ?? []).map((b) => ({
+          id_bank_account: b.id_bank_account,
+          bank_name: b.bank_name,
+        }))}
+        accountPrice={accountPrice}
+        pinIncluded={pinIncluded}
+      />
     </main>
   )
 }

@@ -1,7 +1,10 @@
 /**
  * Utilidades para el dashboard de finanzas mensuales (alineado con
- * `isPaymentConfirmedForMonth` en subscriptions/[id]/page.tsx).
+ * criterio de monto en suscripciones; la confirmación con comprobante vive en
+ * `@/lib/payment-confirmation`).
  */
+
+import { isPaymentSlotAmountConfirmed } from "@/lib/payment-confirmation"
 
 export const getHtmlMonthValueForToday = (): string => {
   const d = new Date()
@@ -39,23 +42,14 @@ export const formatHtmlMonthLabel = (htmlMonth: string): string => {
 
 export const isPaymentRowConfirmed = (
   amount: number | null | undefined,
-  accountPriceByClient: number | null | undefined
-): boolean => {
-  const amountNum =
-    amount !== null && amount !== undefined ? Number(amount) : 0
-  if (Number.isNaN(amountNum)) return false
-
-  if (accountPriceByClient === null || accountPriceByClient === undefined) {
-    return amountNum > 0
-  }
-
-  const priceNum = Number(accountPriceByClient)
-  if (Number.isNaN(priceNum) || priceNum <= 0) {
-    return amountNum > 0
-  }
-
-  return amountNum >= priceNum
-}
+  accountPriceByClient: number | null | undefined,
+  subscriptionPeriodMonths?: number | null
+): boolean =>
+  isPaymentSlotAmountConfirmed(
+    amount,
+    accountPriceByClient,
+    subscriptionPeriodMonths
+  )
 
 export const parseCompanyMembershipCost = (
   companies: unknown

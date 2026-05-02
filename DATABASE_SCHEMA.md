@@ -115,6 +115,8 @@ create table if not exists payments (
   amount numeric(10, 2) not null default 0 check (amount >= 0),
   payment_date timestamptz not null default now(),
   paid_month date not null,
+  payment_reference text null,
+  receipt_storage_path text null,
   created_at timestamptz not null default now(),
   unique (id_subscription, paid_month)
 );
@@ -148,6 +150,15 @@ create index if not exists idx_cards_payment_network on cards(id_payment_network
 create index if not exists idx_cards_card_type on cards(id_card_type);
 ```
 
+### Tabla opcional: pendientes al cerrar mes (`month_close_arrears`)
+
+Creada por la migración `supabase/migrations/20260201153000_month_close_arrears_snapshot.sql`.
+Guarda, por cada ejecución de `close_account_month`, las suscripciones que **no**
+tenían el monto completo vs `accounts.account_price_by_client` para el mes que se
+estaba cerrando (`arrears_month`). Ejemplo:
+
+`select * from month_close_arrears where id_account = <id> order by arrears_month desc;`
+
 ## Notes About Current App Compatibility
 
 - The app currently uses mixed column naming (`snake_case` plus `lastName`, `phoneNumber`, `expirationDate`, and reserved-like `user`).
@@ -159,4 +170,4 @@ create index if not exists idx_cards_card_type on cards(id_card_type);
 - Add Row Level Security policies per authenticated user/role.
 - Encrypt sensitive fields (`accounts.password`, `cards.card_number`) or avoid storing raw values.
 - Add audit columns (`updated_at`, `created_by`, `updated_by`) if you need traceability.
-- Add monthly close table if you want immutable accounting snapshots after "Finish month".
+- La tabla `month_close_arrears` y la RPC actualizada están en `supabase/migrations/20260201153000_month_close_arrears_snapshot.sql` (snapshots al usar **Cerrar mes**).

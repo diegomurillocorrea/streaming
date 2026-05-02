@@ -1,14 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import {
-  CalendarRange,
-  RefreshCw,
-  TrendingDown,
-  TrendingUp,
-  Wallet,
-} from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
+import { RefreshCw, TrendingDown, TrendingUp, Wallet } from "lucide-react"
 
+import { useAdminPeriod } from "@/components/providers/admin-period-provider"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -19,8 +14,6 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import {
   firstDayFromHtmlMonth,
-  formatHtmlMonthLabel,
-  getHtmlMonthValueForToday,
   isPaymentRowConfirmed,
   monthBoundsFromHtmlMonth,
   parseCompanyMembershipCost,
@@ -40,6 +33,7 @@ interface AccountNested {
 
 interface SubscriptionNested {
   id_account?: number | null
+  period_in_months?: number | null
   accounts?: AccountNested | AccountNested[] | null
 }
 
@@ -83,9 +77,8 @@ const formatMoney = (n: number): string =>
   }).format(Number.isFinite(n) ? n : 0)
 
 export default function MonthlyFinancePage() {
-  const [htmlMonth, setHtmlMonth] = useState(getHtmlMonthValueForToday)
+  const { htmlMonth, monthLabel } = useAdminPeriod()
   const [loading, setLoading] = useState(true)
-  const [hasMounted, setHasMounted] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [totalCollected, setTotalCollected] = useState(0)
@@ -96,9 +89,7 @@ export default function MonthlyFinancePage() {
   const [expectedIfAllPaid, setExpectedIfAllPaid] = useState(0)
   const [perAccountRows, setPerAccountRows] = useState<AccountMonthStats[]>([])
 
-  const isLoadingUi = !hasMounted || loading
-
-  const monthLabel = useMemo(() => formatHtmlMonthLabel(htmlMonth), [htmlMonth])
+  const isLoadingUi = loading
 
   const netResult = totalCollected - totalMembershipCost
 
@@ -127,6 +118,7 @@ export default function MonthlyFinancePage() {
             id_subscription,
             subscriptions!inner (
               id_account,
+              period_in_months,
               accounts (
                 id_account,
                 account_name,
@@ -245,7 +237,11 @@ export default function MonthlyFinancePage() {
         sumExpectedSlots += priceNum
       }
 
-      const confirmed = isPaymentRowConfirmed(p.amount, account.account_price_by_client)
+      const confirmed = isPaymentRowConfirmed(
+        p.amount,
+        account.account_price_by_client,
+        sub.period_in_months
+      )
       if (confirmed) {
         entry.paidCount += 1
         sumPaid += 1
@@ -302,17 +298,10 @@ export default function MonthlyFinancePage() {
   }, [htmlMonth])
 
   useEffect(() => {
-    setHasMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!hasMounted) return
+    // Datos remotos: el linter advierte por setState dentro de funciones async; aquí es el patrón habitual de carga.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga al montar y cuando cambia htmlMonth (período global)
     void loadFinance()
-  }, [hasMounted, loadFinance])
-
-  const handleMonthChange = (value: string) => {
-    setHtmlMonth(value)
-  }
+  }, [loadFinance])
 
   const handleRefresh = () => {
     void loadFinance()
@@ -339,34 +328,12 @@ export default function MonthlyFinancePage() {
           </div>
 
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
-              <label
-                htmlFor="finance-month"
-                className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
-              >
-                Mes
-              </label>
-              <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900/50">
-                <CalendarRange
-                  className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
-                  aria-hidden
-                />
-                <input
-                  id="finance-month"
-                  type="month"
-                  value={htmlMonth}
-                  onChange={(e) => handleMonthChange(e.target.value)}
-                  className="border-0 bg-transparent text-sm text-zinc-900 outline-none dark:text-zinc-50"
-                  aria-label="Seleccionar mes a consultar"
-                />
-              </div>
-            </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={handleRefresh}
-              disabled={hasMounted && loading}
+              disabled={loading}
               className="gap-2"
               aria-label="Actualizar datos del mes"
             >

@@ -6,7 +6,14 @@ import { AddClientButton } from "@/components/interface/AddClientButton"
 import { SubscriptionRow } from "@/components/interface/SubscriptionRow"
 import { TableScrollArea } from "@/components/admin/table-scroll-area"
 import { TableSearchInput } from "@/components/admin/table-search-input"
+import { firstDayFromHtmlMonth } from "@/lib/monthly-finance"
+import { firstDayOfCurrentMonthLocal } from "@/lib/subscription-dates"
 import { rowMatchesSearch } from "@/lib/table-search"
+
+export type SubscriptionPaymentBadgeStatus =
+  | "CONFIRMADO"
+  | "REGISTRADO"
+  | "PENDIENTE"
 
 export type SubscriptionTableRow = {
   id_subscription: number
@@ -27,7 +34,9 @@ export type SubscriptionTableRow = {
   lastPaymentBank: string | null
   lastPaymentBankId: number | null
   lastPaymentId: number | null
-  status: string
+  lastPaymentReference: string | null
+  lastPaymentReceiptPath: string | null
+  status: SubscriptionPaymentBadgeStatus
 }
 
 type BankAccountOption = {
@@ -45,6 +54,8 @@ type ClientOption = {
 
 type AccountSubscriptionsTableProps = {
   accountId: number
+  /** Período global `YYYY-MM`: define qué `paid_month` se edita al guardar. */
+  paidMonthHtml: string
   rows: SubscriptionTableRow[]
   emptySlots: number
   clientsList: ClientOption[]
@@ -58,6 +69,7 @@ type AccountSubscriptionsTableProps = {
 
 export function AccountSubscriptionsTable({
   accountId,
+  paidMonthHtml,
   rows,
   emptySlots,
   clientsList,
@@ -68,7 +80,10 @@ export function AccountSubscriptionsTable({
 }: AccountSubscriptionsTableProps) {
   const [searchQuery, setSearchQuery] = useState("")
 
-  const columnCount = pinIncluded ? 13 : 12
+  const paidMonthFirstDay =
+    firstDayFromHtmlMonth(paidMonthHtml) || firstDayOfCurrentMonthLocal()
+
+  const columnCount = pinIncluded ? 14 : 13
 
   const filteredRows = useMemo(() => {
     if (!searchQuery.trim()) return rows
@@ -84,6 +99,7 @@ export function AccountSubscriptionsTable({
           row.status,
           row.lastPaymentBank,
           row.lastPaymentAmount != null ? String(row.lastPaymentAmount) : "",
+          row.lastPaymentReference ?? "",
         ],
         searchQuery
       )
@@ -122,6 +138,7 @@ export function AccountSubscriptionsTable({
               <th className="py-3.5 px-4">Próximo pago</th>
               <th className="py-3.5 px-4">Método de pago</th>
               <th className="w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] px-2 py-3.5">Pago</th>
+              <th className="min-w-[10rem] px-2 py-3.5">Comprobante</th>
               <th className="py-3.5 px-4 text-center">Estado de pago</th>
               <th className="py-3.5 px-4 text-center">Acciones</th>
             </tr>
@@ -131,6 +148,8 @@ export function AccountSubscriptionsTable({
               <SubscriptionRow
                 key={row.id_subscription}
                 index={index}
+                accountId={accountId}
+                paidMonthFirstDay={paidMonthFirstDay}
                 row={row}
                 bankAccounts={bankAccounts ?? []}
                 accountPrice={accountPrice}
@@ -170,6 +189,7 @@ export function AccountSubscriptionsTable({
                   <td className="w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] px-2 py-3.5 align-top text-xs">
                     -
                   </td>
+                  <td className="min-w-[10rem] px-2 py-3.5 align-top text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-center text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-center text-xs">-</td>
                 </tr>

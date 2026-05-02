@@ -4,6 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
+import { AdminPeriodToolbar } from "@/components/admin/admin-period-toolbar"
 import { Footer } from "@/components/footer"
 import { useBreakpoint } from "@/hooks/use-breakpoint"
 import { useTheme } from "@/hooks/use-theme"
@@ -328,6 +329,7 @@ export default function AdministrationLayout({
         <div
           className={`w-full flex-1 p-4 md:p-6 lg:p-8 ${isMobile ? "pt-20" : ""} ${isTablet ? "pt-10" : ""}`}
         >
+          <AdminPeriodToolbar />
           {children}
         </div>
         <div className="shrink-0">

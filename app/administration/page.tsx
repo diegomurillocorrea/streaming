@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ArrowRight,
   Building2,
@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 
 import { TableScrollArea } from "@/components/admin/table-scroll-area"
+import { useAdminPeriod } from "@/components/providers/admin-period-provider"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -26,10 +27,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { hasPaidCalendarMonthForSubscription } from "@/lib/payment-confirmation"
 import { createClient } from "@/lib/supabase/client"
 import {
-  getCurrentMonthKey,
   monthKeyFromDateOnly,
+  monthKeyFromHtmlMonth,
 } from "@/lib/subscription-dates"
 
 interface DashboardStats {
@@ -59,6 +61,8 @@ type UpcomingPaymentRow = {
   id_account: number
   clientLabel: string
   accountName: string
+  /** Mes del período activo (misma etiqueta que la barra superior). */
+  pendingMonthLabel: string
   /** Precio al cliente de la cuenta (`account_price_by_client`), pago mensual esperado. */
   monthlyPriceDue: number | null
   nextPaymentDate: string
@@ -71,6 +75,8 @@ type UpcomingPaymentRow = {
 type SubscriptionPaymentRow = {
   paid_month?: string | null
   amount?: number | null
+  payment_reference?: string | null
+  receipt_storage_path?: string | null
 }
 
 type SubscriptionQueryRow = {
@@ -84,11 +90,14 @@ type SubscriptionQueryRow = {
         id_account?: number | null
         account_name?: string | null
         account_price_by_client?: number | null
+        /** Día de cobro de la cuenta (Postgres `date`); se usa el día del mes dentro del período pendiente. */
+        payment_date?: string | null
       }
     | {
         id_account?: number | null
         account_name?: string | null
         account_price_by_client?: number | null
+        payment_date?: string | null
       }[]
     | null
   clients?:
@@ -113,19 +122,50 @@ const pickNested = <T,>(value: T | T[] | null | undefined): T | null => {
   return value
 }
 
-function calcNextPaymentDateIso(
-  serviceStart: string | null | undefined,
-  periodMonths: number | null | undefined
-): string {
-  if (!serviceStart) return ""
-  const months =
-    periodMonths != null && periodMonths > 0 && !Number.isNaN(periodMonths)
-      ? periodMonths
-      : 1
-  const d = new Date(serviceStart)
-  if (Number.isNaN(d.getTime())) return ""
-  d.setMonth(d.getMonth() + months)
-  return d.toISOString().slice(0, 10)
+function daysInCalendarMonth(year: number, monthIndex: number): number {
+  return new Date(year, monthIndex + 1, 0).getDate()
+}
+
+/**
+ * Fecha de cobro **dentro del mes pendiente** (período activo), usando el día del mes de
+ * `accounts.payment_date`. Así la columna no muestra meses posteriores por el ciclo
+ * `service_start + period_in_months`. Sin día válido: último día del mes pendiente.
+ */
+function dueDateInPendingMonth(
+  selectedMonthKey: string,
+  accountPaymentDate: string | null | undefined
+): string | null {
+  const parts = selectedMonthKey.split("-")
+  const year = Number(parts[0])
+  const monthIndex = Number(parts[1])
+  if (
+    !year ||
+    Number.isNaN(monthIndex) ||
+    monthIndex < 0 ||
+    monthIndex > 11
+  ) {
+    return null
+  }
+
+  let day: number | null = null
+  if (accountPaymentDate) {
+    const dPart = String(accountPaymentDate).split("T")[0]
+    const seg = dPart.split("-")
+    if (seg.length >= 3) {
+      const dd = Number(seg[2])
+      if (!Number.isNaN(dd) && dd >= 1 && dd <= 31) {
+        const dim = daysInCalendarMonth(year, monthIndex)
+        day = Math.min(dd, dim)
+      }
+    }
+  }
+
+  if (day === null) {
+    day = daysInCalendarMonth(year, monthIndex)
+  }
+
+  const calMonth = monthIndex + 1
+  return `${year}-${String(calMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
 function formatShortDate(dateIso: string): string {
@@ -161,6 +201,8 @@ function buildPaymentReminderNotifyUrl(input: {
   clientLabel: string
   accountName: string
   monthlyPriceDue: number | null
+  /** Mes que debe cerrarse (período activo del panel). */
+  pendingMonthLabel: string
   nextPaymentLabel: string
 }): string | null {
   const greeting =
@@ -171,7 +213,7 @@ function buildPaymentReminderNotifyUrl(input: {
     input.monthlyPriceDue !== null && !Number.isNaN(input.monthlyPriceDue)
       ? `Monto mensual: ${formatMoney(input.monthlyPriceDue)}. `
       : ""
-  const message = `Hola ${greeting}, te recordamos un pago pendiente. Cuenta: ${input.accountName}. ${priceSentence}Próximo pago: ${input.nextPaymentLabel}. Gracias.`
+  const message = `Hola ${greeting}, te recordamos un pago pendiente correspondiente a ${input.pendingMonthLabel}. Cuenta: ${input.accountName}. ${priceSentence}Próximo ciclo de cobro: ${input.nextPaymentLabel}. Gracias.`
 
   const waDigits = digitsOnlyPhone(input.phoneRaw)
   if (waDigits.length >= 8) {
@@ -190,32 +232,93 @@ function buildPaymentReminderNotifyUrl(input: {
   return null
 }
 
-function isPaymentConfirmedForMonth(
-  payment: SubscriptionPaymentRow,
-  currentMonthKey: string,
-  accountPrice: number | null
-): boolean {
-  if (!payment?.paid_month) return false
-  if (monthKeyFromDateOnly(payment.paid_month) !== currentMonthKey) {
-    return false
+function buildUpcomingPaymentRows(
+  list: SubscriptionQueryRow[],
+  selectedMonthKey: string,
+  pendingMonthLabel: string
+): UpcomingPaymentRow[] {
+  const mapped: UpcomingPaymentRow[] = []
+
+  for (const sub of list) {
+    const account = pickNested(sub.accounts)
+    const client = pickNested(sub.clients)
+
+    const idAccount =
+      typeof account?.id_account === "number"
+        ? account.id_account
+        : typeof sub.id_account === "number"
+          ? sub.id_account
+          : null
+    if (idAccount === null) continue
+
+    const accountPriceRaw = account?.account_price_by_client
+    const accountPrice =
+      accountPriceRaw !== null && accountPriceRaw !== undefined
+        ? Number(accountPriceRaw)
+        : null
+
+    const payments = sub.payments ?? []
+    const hasPaidAmountForMonth = hasPaidCalendarMonthForSubscription(
+      payments,
+      selectedMonthKey,
+      accountPrice,
+      sub.period_in_months
+    )
+
+    if (hasPaidAmountForMonth) continue
+
+    const nextIso = dueDateInPendingMonth(
+      selectedMonthKey,
+      account?.payment_date
+    )
+    if (!nextIso) continue
+
+    const firstName = client?.name?.trim() ?? ""
+    const lastName = client?.lastName?.trim() ?? ""
+    const clientLabel = [firstName, lastName].filter(Boolean).join(" ")
+    const accountName = account?.account_name?.trim() || `Cuenta ${idAccount}`
+
+    const monthlyPriceDue =
+      accountPrice !== null &&
+      accountPrice !== undefined &&
+      !Number.isNaN(accountPrice)
+        ? accountPrice
+        : null
+
+    const nextPaymentLabel = formatShortDate(nextIso)
+    const phoneDisplay = client?.phoneNumber?.trim() || "—"
+    const notifyUrl = buildPaymentReminderNotifyUrl({
+      phoneRaw: client?.phoneNumber?.trim() ?? "",
+      emailRaw: client?.email,
+      clientLabel: clientLabel || "Cliente sin nombre",
+      accountName,
+      monthlyPriceDue,
+      pendingMonthLabel,
+      nextPaymentLabel,
+    })
+
+    mapped.push({
+      id_subscription: sub.id_subscription,
+      id_account: idAccount,
+      clientLabel: clientLabel || "Cliente sin nombre",
+      accountName,
+      pendingMonthLabel,
+      monthlyPriceDue,
+      nextPaymentDate: nextIso,
+      nextPaymentLabel,
+      phone: phoneDisplay,
+      notifyUrl,
+    })
   }
 
-  const amountNum =
-    payment.amount !== null && payment.amount !== undefined
-      ? Number(payment.amount)
-      : 0
-  if (Number.isNaN(amountNum)) return false
+  mapped.sort((a, b) => {
+    if (a.nextPaymentDate !== b.nextPaymentDate) {
+      return a.nextPaymentDate.localeCompare(b.nextPaymentDate)
+    }
+    return a.clientLabel.localeCompare(b.clientLabel, "es")
+  })
 
-  if (accountPrice === null || accountPrice === undefined) {
-    return amountNum > 0
-  }
-
-  const priceNum = Number(accountPrice)
-  if (Number.isNaN(priceNum) || priceNum <= 0) {
-    return amountNum > 0
-  }
-
-  return amountNum >= priceNum
+  return mapped
 }
 
 const QUICK_LINKS: {
@@ -284,14 +387,32 @@ const STAT_CONFIG: {
 ]
 
 export default function AdministrationDashboardPage() {
+  const { htmlMonth, monthLabel } = useAdminPeriod()
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS)
   const [loading, setLoading] = useState(true)
   const [hasMounted, setHasMounted] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [upcomingRows, setUpcomingRows] = useState<UpcomingPaymentRow[]>([])
+  const [subscriptionRowsForUpcoming, setSubscriptionRowsForUpcoming] = useState<
+    SubscriptionQueryRow[]
+  >([])
   const [upcomingError, setUpcomingError] = useState<string | null>(null)
 
   const isLoadingUi = !hasMounted || loading
+
+  const selectedMonthKey = useMemo(
+    () => monthKeyFromHtmlMonth(htmlMonth),
+    [htmlMonth]
+  )
+
+  const upcomingRows = useMemo(
+    () =>
+      buildUpcomingPaymentRows(
+        subscriptionRowsForUpcoming,
+        selectedMonthKey,
+        monthLabel
+      ),
+    [subscriptionRowsForUpcoming, selectedMonthKey, monthLabel]
+  )
 
   const loadStats = useCallback(async () => {
     setLoading(true)
@@ -313,8 +434,6 @@ export default function AdministrationDashboardPage() {
     }
 
     try {
-      const currentMonthKey = getCurrentMonthKey()
-
       const [
         accounts,
         clients,
@@ -345,7 +464,8 @@ export default function AdministrationDashboardPage() {
             accounts (
               id_account,
               account_name,
-              account_price_by_client
+              account_price_by_client,
+              payment_date
             ),
             clients (
               name,
@@ -355,7 +475,9 @@ export default function AdministrationDashboardPage() {
             ),
             payments (
               amount,
-              paid_month
+              paid_month,
+              payment_reference,
+              receipt_storage_path
             )
           `
           )
@@ -379,95 +501,10 @@ export default function AdministrationDashboardPage() {
         setUpcomingError(
           "No se pudo cargar la lista de próximos cobros. Intenta de nuevo."
         )
-        setUpcomingRows([])
+        setSubscriptionRowsForUpcoming([])
       } else {
         const list = (subscriptionRows ?? []) as SubscriptionQueryRow[]
-        const mapped: UpcomingPaymentRow[] = []
-
-        for (const sub of list) {
-          const account = pickNested(sub.accounts)
-          const client = pickNested(sub.clients)
-          const idAccount =
-            typeof account?.id_account === "number"
-              ? account.id_account
-              : typeof sub.id_account === "number"
-                ? sub.id_account
-                : null
-          if (idAccount === null) continue
-
-          const accountPriceRaw = account?.account_price_by_client
-          const accountPrice =
-            accountPriceRaw !== null && accountPriceRaw !== undefined
-              ? Number(accountPriceRaw)
-              : null
-
-          const payments = sub.payments ?? []
-          const paymentThisMonth = payments.find((p) => {
-            if (!p.paid_month) return false
-            return monthKeyFromDateOnly(p.paid_month) === currentMonthKey
-          })
-
-          const isConfirmed = paymentThisMonth
-            ? isPaymentConfirmedForMonth(
-                paymentThisMonth,
-                currentMonthKey,
-                accountPrice
-              )
-            : false
-
-          if (isConfirmed) continue
-
-          const nextIso = calcNextPaymentDateIso(
-            sub.service_start_date,
-            sub.period_in_months
-          )
-          if (!nextIso) continue
-
-          const firstName = client?.name?.trim() ?? ""
-          const lastName = client?.lastName?.trim() ?? ""
-          const clientLabel = [firstName, lastName].filter(Boolean).join(" ")
-          const accountName =
-            account?.account_name?.trim() || `Cuenta ${idAccount}`
-
-          const monthlyPriceDue =
-            accountPrice !== null &&
-            accountPrice !== undefined &&
-            !Number.isNaN(accountPrice)
-              ? accountPrice
-              : null
-
-          const nextPaymentLabel = formatShortDate(nextIso)
-          const phoneDisplay = client?.phoneNumber?.trim() || "—"
-          const notifyUrl = buildPaymentReminderNotifyUrl({
-            phoneRaw: client?.phoneNumber?.trim() ?? "",
-            emailRaw: client?.email,
-            clientLabel: clientLabel || "Cliente sin nombre",
-            accountName,
-            monthlyPriceDue,
-            nextPaymentLabel,
-          })
-
-          mapped.push({
-            id_subscription: sub.id_subscription,
-            id_account: idAccount,
-            clientLabel: clientLabel || "Cliente sin nombre",
-            accountName,
-            monthlyPriceDue,
-            nextPaymentDate: nextIso,
-            nextPaymentLabel,
-            phone: phoneDisplay,
-            notifyUrl,
-          })
-        }
-
-        mapped.sort((a, b) => {
-          if (a.nextPaymentDate !== b.nextPaymentDate) {
-            return a.nextPaymentDate.localeCompare(b.nextPaymentDate)
-          }
-          return a.clientLabel.localeCompare(b.clientLabel, "es")
-        })
-
-        setUpcomingRows(mapped)
+        setSubscriptionRowsForUpcoming(list)
       }
     } catch (e) {
       console.error("[dashboard] loadStats", e)
@@ -578,20 +615,35 @@ export default function AdministrationDashboardPage() {
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
               <CalendarClock className="h-5 w-5" aria-hidden />
             </span>
-            <div>
-              <h2
-                id="upcoming-payments-heading"
-                className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
-              >
-                Cobros pendientes (próximas fechas)
-              </h2>
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-2 gap-y-2">
+                <h2
+                  id="upcoming-payments-heading"
+                  className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
+                >
+                  Cobros pendientes (próximas fechas)
+                </h2>
+                <span
+                  className="inline-flex shrink-0 items-center rounded-full border border-emerald-500/35 bg-emerald-500/12 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-900 dark:border-emerald-400/40 dark:bg-emerald-950/70 dark:text-emerald-100"
+                  aria-label={`Período activo para esta tabla: ${monthLabel}`}
+                >
+                  Mes: {monthLabel}
+                </span>
+              </div>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                Clientes con pago del mes actual incompleto, ordenados por la
-                fecha de próximo cobro (inicio de servicio + período en meses).
-                &quot;Pago mensual&quot; es el precio al cliente configurado en
-                la cuenta (lo que deben cancelar cada mes). &quot;Enviar
-                notificación&quot; abre WhatsApp (si hay teléfono con dígitos
-                suficientes) o el cliente de correo si solo hay email.
+                Aquí entran solo quienes{" "}
+                <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
+                  no tienen el monto completo registrado
+                </strong>{" "}
+                en <strong className="font-semibold">{monthLabel}</strong> (respecto al
+                precio al cliente de la cuenta). Si ya cobraste pero no cargaste referencia o
+                archivo,{" "}
+                <strong className="font-semibold">no</strong> aparecen aquí; revisa eso en{" "}
+                <strong className="font-semibold">Suscripciones</strong> (estado Sin
+                comprobante). Cambia mes en <strong className="font-semibold">Período activo</strong>
+                . &quot;Próximo ciclo&quot; es la fecha de cobro de ese mes según el{" "}
+                <strong className="font-semibold">día de pago de la cuenta</strong>, siempre
+                dentro de <strong className="font-semibold">{monthLabel}</strong>.
               </p>
             </div>
           </div>
@@ -605,15 +657,21 @@ export default function AdministrationDashboardPage() {
 
         <TableScrollArea>
           <table className="w-full border-collapse text-left text-sm min-w-[max(100%,36rem)]">
-            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
-              <tr className="text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-200">
+            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-950 dark:bg-emerald-950">
+              <tr className="text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-50">
                 <th className="px-4 py-3.5">Cliente</th>
                 <th className="px-4 py-3.5">Cuenta</th>
                 <th className="px-4 py-3.5">Teléfono</th>
                 <th className="whitespace-nowrap px-4 py-3.5 text-right">
                   Pago mensual
                 </th>
-                <th className="whitespace-nowrap px-4 py-3.5">Próximo pago</th>
+                <th className="whitespace-nowrap px-4 py-3.5">Mes pendiente</th>
+                <th
+                  className="whitespace-nowrap px-4 py-3.5"
+                  title="Día de cobro dentro del mes pendiente, tomado del campo «Día de pago» de la cuenta en ese mismo mes calendario."
+                >
+                  Próximo ciclo
+                </th>
                 <th className="px-4 py-3.5 text-center">
                   Enviar notificación
                 </th>
@@ -623,7 +681,7 @@ export default function AdministrationDashboardPage() {
             <tbody>
               {isLoadingUi ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm">
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm">
                     <span className="inline-flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
                       <RefreshCw
                         className="h-4 w-4 animate-spin"
@@ -636,12 +694,11 @@ export default function AdministrationDashboardPage() {
               ) : upcomingRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400"
                   >
-                    No hay cobros pendientes con fecha de próximo pago
-                    calculada, o todos los clientes ya completaron el pago del
-                    mes actual.
+                    No hay cobros pendientes para {monthLabel}, o todos los
+                    clientes ya tienen el monto completo registrado ese mes.
                   </td>
                 </tr>
               ) : (
@@ -663,6 +720,9 @@ export default function AdministrationDashboardPage() {
                       {row.monthlyPriceDue === null
                         ? "—"
                         : formatMoney(row.monthlyPriceDue)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-800 dark:text-emerald-100">
+                      <span className="font-medium">{row.pendingMonthLabel}</span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-800 dark:text-zinc-200">
                       {row.nextPaymentLabel}

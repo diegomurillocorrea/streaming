@@ -1,4 +1,7 @@
 import { Geist_Mono, Poppins } from "next/font/google"
+
+import { AppProviders } from "@/components/providers/app-providers"
+
 import "./globals.css"
 
 const poppins = Poppins({
@@ -26,7 +29,7 @@ export default function RootLayout({ children }) {
       <body
         className={`${poppins.variable} ${geistMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
       >
-        {children}
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   )
