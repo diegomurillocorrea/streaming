@@ -8,6 +8,7 @@ const isPublicPathname = (pathname: string) => {
   if (PUBLIC_ROUTES.includes(pathname)) return true
   if (pathname === "/administration/bank-accounts/share") return true
   if (pathname.startsWith("/administration/bank-accounts/share/")) return true
+  if (pathname === "/api/public/bank-accounts-share") return true
   return false
 }
 

@@ -27,7 +27,7 @@ export function Footer() {
         </span>
       </span>
       <span
-        className="text-sm font-medium text-white"
+        className="text-sm font-medium text-black"
         aria-label="DAIEGO LLC copyright 2026"
       >
         DAIEGO LLC © 2026

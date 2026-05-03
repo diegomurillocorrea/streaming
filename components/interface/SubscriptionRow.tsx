@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient as createBrowserClient } from "@/lib/supabase/client"
@@ -16,41 +15,31 @@ import {
 } from "@/components/ui/select"
 import type { SubscriptionTableRow } from "@/components/admin/account-subscriptions-table"
 import {
-  buildReceiptStoragePath,
-  isReceiptMimeAllowed,
-  PAYMENT_RECEIPTS_BUCKET,
-  PAYMENT_RECEIPT_MAX_BYTES,
-} from "@/lib/payment-evidence"
-import {
   fullMonthsCoveredByAmount,
   paymentSliceAmount,
   roundMoney2,
   spreadMonthsCount,
   splitTotalAcrossSlices,
 } from "@/lib/multi-month-payment"
-import { addCalendarMonthsFirstDay } from "@/lib/subscription-dates"
+import {
+  addCalendarMonthsFirstDay,
+  formatSpanishMonthYearFromIso,
+  subscriptionCalendarPaymentDueYmd,
+} from "@/lib/subscription-dates"
 import { DeleteSubscriptionButton } from "./DeleteSubscriptionButton"
 
 const BANK_NONE = "__none__"
 
 function formatDisplayDate(dateStr: string | null | undefined) {
   if (!dateStr) return "-"
-  const d = new Date(dateStr)
+  const dayPart = String(dateStr).split("T")[0]
+  const d = new Date(`${dayPart}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return "-"
   return new Intl.DateTimeFormat("es", {
     year: "numeric",
     month: "short",
     day: "2-digit",
   }).format(d)
-}
-
-function calcNextPaymentDate(serviceStart: string, periodStr: string) {
-  if (!serviceStart) return ""
-  const months = Number(periodStr)
-  if (!months || Number.isNaN(months)) return ""
-
-  const d = new Date(serviceStart)
-  d.setMonth(d.getMonth() + months)
-  return d.toISOString().slice(0, 10)
 }
 
 type BankAccountOption = {
@@ -135,14 +124,24 @@ export function SubscriptionRow({
     setPaymentReference(row.lastPaymentReference?.trim() ?? "")
   }, [row.lastPaymentReference])
 
-  const nextPaymentDate = useMemo(
-    () => calcNextPaymentDate(serviceStart, period),
-    [serviceStart, period]
-  )
+  const nextPaymentDate = useMemo(() => {
+    const ymd = subscriptionCalendarPaymentDueYmd(serviceStart, Number(period))
+    return ymd ?? ""
+  }, [serviceStart, period])
 
   const nextPaymentDisplay = useMemo(
     () => (nextPaymentDate ? formatDisplayDate(nextPaymentDate) : "-"),
     [nextPaymentDate]
+  )
+
+  const serviceLinkedMonthLabel = useMemo(
+    () => formatSpanishMonthYearFromIso(row.subscriptionCreatedAt),
+    [row.subscriptionCreatedAt]
+  )
+
+  const clientFullName = useMemo(
+    () => `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() || "—",
+    [row.firstName, row.lastName]
   )
 
   /** Misma lógica que la tabla (incluye mes cubierto por pago ancla en otro mes). */
@@ -151,11 +150,18 @@ export function SubscriptionRow({
       case "CONFIRMADO":
         return { kind: "CONFIRMADO" as const, label: "CONFIRMADO" }
       case "REGISTRADO":
-        return { kind: "REGISTRADO" as const, label: "Sin comprobante" }
+        return { kind: "REGISTRADO" as const, label: "Sin referencia" }
+      case "NO_APLICA":
+        return {
+          kind: "NO_APLICA" as const,
+          label: "Antes del inicio",
+        }
       default:
         return { kind: "PENDIENTE" as const, label: "PENDIENTE" }
     }
   }, [row.status])
+
+  const isPaymentMonthNotApplicable = row.status === "NO_APLICA"
 
   const persistSubscription = async (): Promise<boolean> => {
     setSavingSubscription(true)
@@ -230,6 +236,10 @@ export function SubscriptionRow({
         : paymentReference
     const refTrimmed = effectiveRef.trim()
     const paymentRefDb = refTrimmed === "" ? null : refTrimmed
+
+    if (row.status === "NO_APLICA") {
+      return true
+    }
 
     if (!row.lastPaymentId && !hasAmount && !hasBank) {
       return true
@@ -540,117 +550,6 @@ export function SubscriptionRow({
     await persistPayment({ paymentReference })
   }
 
-  const handleViewReceipt = async () => {
-    const path = row.lastPaymentReceiptPath?.trim()
-    if (!path) return
-    setFeedback(null)
-    const { data, error } = await supabase.storage
-      .from(PAYMENT_RECEIPTS_BUCKET)
-      .createSignedUrl(path, 3600)
-    if (error || !data?.signedUrl) {
-      setFeedback(
-        error?.message ??
-          "No se pudo abrir el comprobante. Revisa permisos del bucket en Supabase."
-      )
-      return
-    }
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer")
-  }
-
-  const handleRemoveReceipt = async () => {
-    const path = row.lastPaymentReceiptPath?.trim()
-    if (!path || !row.lastPaymentId) return
-    setSavingPayment(true)
-    setFeedback(null)
-    try {
-      const { error: rmErr } = await supabase.storage
-        .from(PAYMENT_RECEIPTS_BUCKET)
-        .remove([path])
-      if (rmErr) {
-        console.error("remove receipt", rmErr)
-        setFeedback(rmErr.message || "No se pudo eliminar el archivo")
-        return
-      }
-      const { error: dbErr } = await supabase
-        .from("payments")
-        .update({ receipt_storage_path: null })
-        .eq("id_payment", row.lastPaymentId)
-      if (dbErr) {
-        console.error("clear receipt path", dbErr)
-        setFeedback(dbErr.message || "No se pudo actualizar el pago")
-        return
-      }
-      router.refresh()
-    } finally {
-      setSavingPayment(false)
-    }
-  }
-
-  const handleReceiptFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = e.target.files?.[0]
-    e.target.value = ""
-    if (!file) return
-    if (!row.lastPaymentId) {
-      setFeedback(
-        "Primero guarda el monto del mes (tabla de arriba) para crear el registro de pago."
-      )
-      return
-    }
-    if (file.size > PAYMENT_RECEIPT_MAX_BYTES) {
-      setFeedback("El archivo supera 5 MB.")
-      return
-    }
-    if (!isReceiptMimeAllowed(file.type)) {
-      setFeedback("Formato no permitido. Usa JPEG, PNG, WebP o PDF.")
-      return
-    }
-    setSavingPayment(true)
-    setFeedback(null)
-    try {
-      const path = buildReceiptStoragePath({
-        accountId,
-        paymentId: row.lastPaymentId,
-        fileName: file.name,
-      })
-      const oldPath = row.lastPaymentReceiptPath?.trim()
-      const { error: upErr } = await supabase.storage
-        .from(PAYMENT_RECEIPTS_BUCKET)
-        .upload(path, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type || "application/octet-stream",
-        })
-      if (upErr) {
-        console.error("upload receipt", upErr)
-        setFeedback(upErr.message || "No se pudo subir el comprobante")
-        return
-      }
-      if (oldPath && oldPath !== path) {
-        const { error: rmOld } = await supabase.storage
-          .from(PAYMENT_RECEIPTS_BUCKET)
-          .remove([oldPath])
-        if (rmOld) {
-          console.warn("remove old receipt", rmOld)
-        }
-      }
-      const { error: dbErr } = await supabase
-        .from("payments")
-        .update({ receipt_storage_path: path })
-        .eq("id_payment", row.lastPaymentId)
-      if (dbErr) {
-        console.error("save receipt path", dbErr)
-        setFeedback(dbErr.message || "No se pudo guardar la ruta del archivo")
-        await supabase.storage.from(PAYMENT_RECEIPTS_BUCKET).remove([path])
-        return
-      }
-      router.refresh()
-    } finally {
-      setSavingPayment(false)
-    }
-  }
-
   const handleSubscriptionBlur = async () => {
     await persistSubscription()
   }
@@ -673,42 +572,22 @@ export function SubscriptionRow({
         {index + 1}
       </td>
 
-      <td className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5 align-top text-xs">
+      <td className="min-w-[10rem] max-w-[16rem] px-2 py-3.5 align-top text-xs">
         {clientEditHref ? (
           <Link
             href={clientEditHref}
             className="block min-w-0 truncate font-medium text-emerald-700 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:text-emerald-200"
-            title={row.firstName || undefined}
-            aria-label={`Abrir edición de cliente: ${clientEditLabel} (nombre)`}
+            title={clientFullName !== "—" ? clientFullName : undefined}
+            aria-label={`Abrir edición de cliente: ${clientEditLabel}`}
           >
-            {row.firstName || "-"}
+            {clientFullName}
           </Link>
         ) : (
           <span
             className="block min-w-0 truncate font-medium"
-            title={row.firstName || undefined}
+            title={clientFullName !== "—" ? clientFullName : undefined}
           >
-            {row.firstName || "-"}
-          </span>
-        )}
-      </td>
-
-      <td className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5 align-top text-xs">
-        {clientEditHref ? (
-          <Link
-            href={clientEditHref}
-            className="block min-w-0 truncate text-emerald-700 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:text-emerald-200"
-            title={row.lastName || undefined}
-            aria-label={`Abrir edición de cliente: ${clientEditLabel} (apellido)`}
-          >
-            {row.lastName || "-"}
-          </Link>
-        ) : (
-          <span
-            className="block min-w-0 truncate"
-            title={row.lastName || undefined}
-          >
-            {row.lastName || "-"}
+            {clientFullName}
           </span>
         )}
       </td>
@@ -745,16 +624,8 @@ export function SubscriptionRow({
 
       <td className="py-3.5 px-4 align-top text-xs">{row.phone || "-"}</td>
 
-      <td className="py-3.5 px-4 align-top">
-        <Input
-          type="date"
-          value={serviceStart || ""}
-          onChange={(e) => setServiceStart(e.target.value)}
-          onBlur={handleSubscriptionBlur}
-          disabled={isBusy}
-          className="h-8 border-zinc-200 bg-white text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50"
-          aria-label="Fecha de inicio de servicio"
-        />
+      <td className="py-3.5 px-4 align-top text-xs text-zinc-800 dark:text-emerald-100">
+        <span className="font-medium">{serviceLinkedMonthLabel}</span>
       </td>
 
       <td className="py-3.5 px-4 align-top text-center">
@@ -776,7 +647,7 @@ export function SubscriptionRow({
         <Select
           value={bankSelectValue}
           onValueChange={handleBankChange}
-          disabled={isBusy}
+          disabled={isBusy || isPaymentMonthNotApplicable}
         >
           <SelectTrigger
             className="h-8 border-zinc-200 bg-white text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50"
@@ -801,8 +672,8 @@ export function SubscriptionRow({
         </Select>
       </td>
 
-      <td className="w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] px-2 py-3.5 align-top">
-        <div className="flex flex-col gap-1">
+      <td className="min-w-[11rem] max-w-[18rem] px-2 py-3.5 align-top">
+        <div className="flex flex-col gap-2">
           <div className="flex items-center gap-0.5">
             <span className="shrink-0 text-xs text-zinc-700 dark:text-emerald-50">$</span>
             <Input
@@ -812,32 +683,11 @@ export function SubscriptionRow({
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
               onBlur={handlePaymentBlur}
-              disabled={isBusy}
-              className="h-8 min-w-0 w-full max-w-[6.5rem] flex-1 border-zinc-200 bg-white text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50"
+              disabled={isBusy || isPaymentMonthNotApplicable}
+              className="h-8 min-w-0 w-full max-w-[7rem] flex-1 border-zinc-200 bg-white text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50"
               aria-label="Monto del pago del mes"
             />
           </div>
-          {accountPrice !== null &&
-          accountPrice !== undefined &&
-          !Number.isNaN(Number(accountPrice)) &&
-          Number(accountPrice) > 0 ? (
-            <p className="max-w-[9rem] text-[10px] leading-snug text-zinc-500 dark:text-emerald-400">
-              Con <span className="font-medium">período &gt; 1</span>, un pago al
-              precio mensual reparte ese monto en tantos meses consecutivos como el
-              período. Si pagas 2× el precio (o más), se reparten meses según el
-              dinero.
-            </p>
-          ) : null}
-          {feedback && (
-            <span className="text-[11px] text-red-600 dark:text-red-400" role="alert">
-              {feedback}
-            </span>
-          )}
-        </div>
-      </td>
-
-      <td className="min-w-[10rem] max-w-[14rem] px-2 py-3.5 align-top">
-        <div className="flex flex-col gap-2">
           <div className="flex flex-col gap-0.5">
             <Label
               htmlFor={`pay-ref-${row.id_subscription}`}
@@ -851,48 +701,17 @@ export function SubscriptionRow({
               value={paymentReference}
               onChange={(e) => setPaymentReference(e.target.value)}
               onBlur={handleReferenceBlur}
-              disabled={isBusy}
+              disabled={isBusy || isPaymentMonthNotApplicable}
               placeholder="Ej. folio, depósito"
               className="h-8 border-zinc-200 bg-white text-xs text-zinc-900 dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-50"
-              aria-label="Referencia o nota del comprobante de pago"
+              aria-label="Referencia del pago"
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
-              className="block w-full max-w-full text-[10px] text-zinc-600 file:mr-1 file:rounded-md file:border-0 file:bg-emerald-600 file:px-2 file:py-1 file:text-[10px] file:font-medium file:text-white hover:file:bg-emerald-700 dark:text-emerald-200 dark:file:bg-emerald-700"
-              disabled={isBusy}
-              onChange={handleReceiptFileChange}
-              aria-label="Subir imagen o PDF del comprobante"
-            />
-            <div className="flex flex-wrap gap-1">
-              {row.lastPaymentReceiptPath?.trim() ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 border-emerald-300 px-2 text-[10px] text-emerald-800 dark:border-emerald-700 dark:text-emerald-200"
-                    disabled={isBusy}
-                    onClick={() => void handleViewReceipt()}
-                  >
-                    Ver archivo
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2 text-[10px] text-zinc-500 hover:text-red-600 dark:text-emerald-400"
-                    disabled={isBusy}
-                    onClick={() => void handleRemoveReceipt()}
-                  >
-                    Quitar
-                  </Button>
-                </>
-              ) : null}
-            </div>
-          </div>
+          {feedback ? (
+            <span className="text-[11px] text-red-600 dark:text-red-400" role="alert">
+              {feedback}
+            </span>
+          ) : null}
         </div>
       </td>
 
@@ -903,7 +722,9 @@ export function SubscriptionRow({
               ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-700 dark:text-emerald-50"
               : displayPaymentStatus.kind === "REGISTRADO"
                 ? "bg-sky-100 text-sky-900 dark:bg-sky-900/60 dark:text-sky-100"
-                : "bg-amber-100 text-amber-800 dark:bg-amber-700 dark:text-amber-50"
+                : displayPaymentStatus.kind === "NO_APLICA"
+                  ? "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                  : "bg-amber-100 text-amber-800 dark:bg-amber-700 dark:text-amber-50"
           }`}
         >
           {displayPaymentStatus.label}

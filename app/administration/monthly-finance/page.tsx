@@ -14,6 +14,7 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import {
   firstDayFromHtmlMonth,
+  isCompanyInFinancialScope,
   isPaymentRowConfirmed,
   monthBoundsFromHtmlMonth,
   parseCompanyMembershipCost,
@@ -170,8 +171,13 @@ export default function MonthlyFinancePage() {
     const createdThisMonth = allAccounts.filter((row) => {
       if (!row.created_at) return false
       const created = new Date(row.created_at)
-      return created >= bounds.start && created <= bounds.end
+      const inMonth = created >= bounds.start && created <= bounds.end
+      return inMonth && isCompanyInFinancialScope(row.companies)
     })
+
+    const existingFinancialAccounts = existingAccounts.filter((row) =>
+      isCompanyInFinancialScope(row.companies)
+    )
 
     const statsByAccount = new Map<
       number,
@@ -197,7 +203,7 @@ export default function MonthlyFinancePage() {
       return statsByAccount.get(idAccount)!
     }
 
-    for (const acc of existingAccounts) {
+    for (const acc of existingFinancialAccounts) {
       const id = acc.id_account
       if (!Number.isFinite(id)) continue
       ensureAccountEntry(id)
@@ -217,6 +223,7 @@ export default function MonthlyFinancePage() {
 
       const account = pickNested(sub.accounts)
       if (!account?.id_account) continue
+      if (!isCompanyInFinancialScope(account.companies)) continue
 
       const priceRaw = account.account_price_by_client
       const priceNum =
@@ -254,7 +261,7 @@ export default function MonthlyFinancePage() {
     let membershipSum = 0
     const tableRows: AccountMonthStats[] = []
 
-    for (const acc of existingAccounts) {
+    for (const acc of existingFinancialAccounts) {
       const id = acc.id_account
       const membership = parseCompanyMembershipCost(acc.companies)
       membershipSum += membership
@@ -285,7 +292,24 @@ export default function MonthlyFinancePage() {
       })
     }
 
-    tableRows.sort((a, b) => b.collected - a.collected)
+    const companyCollectedSum = new Map<string, number>()
+    for (const row of tableRows) {
+      companyCollectedSum.set(
+        row.companyLabel,
+        (companyCollectedSum.get(row.companyLabel) ?? 0) + row.collected
+      )
+    }
+
+    tableRows.sort((a, b) => {
+      const sumA = companyCollectedSum.get(a.companyLabel) ?? 0
+      const sumB = companyCollectedSum.get(b.companyLabel) ?? 0
+      if (sumB !== sumA) return sumB - sumA
+      const byLabel = a.companyLabel.localeCompare(b.companyLabel, "es", {
+        sensitivity: "base",
+      })
+      if (byLabel !== 0) return byLabel
+      return b.collected - a.collected
+    })
 
     setTotalCollected(sumCollected)
     setTotalMembershipCost(membershipSum)
@@ -320,9 +344,10 @@ export default function MonthlyFinancePage() {
                 Finanzas del mes
               </h1>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Ingresos por cobros registrados, costo de membresías por cuenta de
-                streaming y clientes pagados vs pendientes (mismo criterio que en
-                suscripciones).
+                Ingresos por cobros registrados, costo de membresías y clientes
+                pagados vs pendientes solo para empresas con costo de membresía
+                configurado (servicios sin ese costo, p. ej. correo interno, no
+                entran aquí).
               </p>
             </div>
           </div>
@@ -399,8 +424,8 @@ export default function MonthlyFinancePage() {
                 )}
               </CardTitle>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Suma del costo mensual por empresa en cada cuenta de streaming
-                existente al cierre del mes.
+                Suma del costo mensual solo en cuentas cuya empresa tiene costo
+                de membresía al cierre del mes.
               </p>
             </CardHeader>
           </Card>
@@ -468,7 +493,8 @@ export default function MonthlyFinancePage() {
                 )}
               </CardTitle>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Cupos con pago completo según precio al cliente.
+                Cupos con pago completo (cuentas con empresa en alcance
+                financiero).
               </p>
             </CardHeader>
           </Card>
@@ -486,7 +512,8 @@ export default function MonthlyFinancePage() {
                 )}
               </CardTitle>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Registros de mes con monto bajo el precio esperado.
+                Registros de mes con monto bajo el precio esperado (mismo
+                alcance).
               </p>
             </CardHeader>
           </Card>
@@ -504,7 +531,8 @@ export default function MonthlyFinancePage() {
                 )}
               </CardTitle>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Suma de precios al cliente en cupos con mes registrado.
+                Suma de precios al cliente en cupos con mes registrado (solo
+                empresas con costo de membresía).
               </p>
             </CardHeader>
           </Card>
@@ -522,7 +550,8 @@ export default function MonthlyFinancePage() {
                 )}
               </CardTitle>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Cuentas de streaming dadas de alta en este mes.
+                Cuentas dadas de alta en este mes (solo empresas en alcance
+                financiero).
               </p>
             </CardHeader>
           </Card>
@@ -538,8 +567,9 @@ export default function MonthlyFinancePage() {
             Por cuenta de streaming
           </h2>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Ordenadas por cobrado en el mes. Incluye cuentas sin movimientos (0
-            cobrado).
+            Solo cuentas de empresas con costo de membresía; agrupadas por
+            empresa (bloques ordenados por cobrado total del mes de la empresa;
+            dentro de cada bloque, por cobrado de la cuenta, incluye 0 cobrado).
           </p>
         </div>
 
@@ -613,7 +643,8 @@ export default function MonthlyFinancePage() {
                     colSpan={8}
                     className="px-4 py-8 text-center text-zinc-500 dark:text-zinc-400"
                   >
-                    No hay cuentas registradas.
+                    No hay cuentas en alcance financiero (empresa sin costo de
+                    membresía no aparece aquí).
                   </td>
                 </tr>
               ) : (

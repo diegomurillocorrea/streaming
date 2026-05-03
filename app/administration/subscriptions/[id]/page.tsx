@@ -349,11 +349,11 @@ export default async function AccountSubscriptionsPage({
           <FinishMonthButton accountId={accountId} />
           <p className="text-xs text-zinc-500 dark:text-emerald-400">
             Tras cerrar mes las fechas de servicio avanzan; para ver pendientes de
-            un mes pasado (p. ej. abril), elige ese mes en{" "}
+            un mes pasado (p. ej. abril), elige ese mes en el modal de la pestaña{" "}
             <strong className="font-medium text-zinc-700 dark:text-emerald-200">
-              Período activo
+              Periodo
             </strong>{" "}
-            arriba.
+            del menú lateral.
           </p>
         </div>
       </header>

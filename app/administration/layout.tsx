@@ -222,7 +222,8 @@ function NavContent({
       </nav>
 
       <div className="border-t border-zinc-200/80 p-3 dark:border-zinc-800">
-        <div className="flex flex-col gap-2">
+        <AdminPeriodToolbar />
+        <div className="mt-2 flex flex-col gap-2">
           {userName && (
             <div className="rounded-xl px-4 py-2 text-sm text-zinc-500 dark:text-zinc-400">
               <span className="block truncate">{userName}</span>
@@ -329,7 +330,6 @@ export default function AdministrationLayout({
         <div
           className={`w-full flex-1 p-4 md:p-6 lg:p-8 ${isMobile ? "pt-20" : ""} ${isTablet ? "pt-10" : ""}`}
         >
-          <AdminPeriodToolbar />
           {children}
         </div>
         <div className="shrink-0">

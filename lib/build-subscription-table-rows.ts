@@ -6,7 +6,10 @@ import {
   findPaymentCoveringCalendarMonth,
   subscriptionPaymentBadgeStatus,
 } from "@/lib/payment-confirmation"
-import { monthKeyFromDateOnly } from "@/lib/subscription-dates"
+import {
+  monthKeyFromDateOnly,
+  subscriptionDebtAppliesToCalendarMonthKey,
+} from "@/lib/subscription-dates"
 
 export type SubscriptionPaymentPayload = {
   id_payment?: number
@@ -33,6 +36,8 @@ export type SubscriptionPayloadRow = {
   pin?: string | null
   service_start_date?: string | null
   period_in_months?: number | null
+  /** Alta de la fila en BD = mes en que se agregó el cliente a la cuenta */
+  created_at?: string | null
   clients?: SubscriptionPayloadClient | SubscriptionPayloadClient[] | null
   payments?: SubscriptionPaymentPayload[] | null
 }
@@ -116,12 +121,17 @@ export const buildSubscriptionTableRows = (
     }
 
     const status: SubscriptionPaymentBadgeStatus =
-      subscriptionPaymentBadgeStatus(
-        payments,
-        selectedMonthKey,
-        accountPrice,
-        sub.period_in_months
+      !subscriptionDebtAppliesToCalendarMonthKey(
+        sub.service_start_date,
+        selectedMonthKey
       )
+        ? "NO_APLICA"
+        : subscriptionPaymentBadgeStatus(
+            payments,
+            selectedMonthKey,
+            accountPrice,
+            sub.period_in_months
+          )
 
     return {
       id_subscription: sub.id_subscription,
@@ -150,6 +160,10 @@ export const buildSubscriptionTableRows = (
       lastPaymentId: effectivePaymentRow?.id_payment ?? null,
       lastPaymentReference: effectivePaymentRow?.payment_reference ?? null,
       lastPaymentReceiptPath: effectivePaymentRow?.receipt_storage_path ?? null,
+      subscriptionCreatedAt:
+        sub.created_at != null && sub.created_at !== undefined
+          ? String(sub.created_at)
+          : null,
       status,
     }
   })

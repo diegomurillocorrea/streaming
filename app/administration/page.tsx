@@ -3,7 +3,6 @@
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
-  ArrowRight,
   Building2,
   CalendarClock,
   CreditCard,
@@ -15,7 +14,6 @@ import {
   Users,
   Wallet,
   Link2,
-  PiggyBank,
 } from "lucide-react"
 
 import { TableScrollArea } from "@/components/admin/table-scroll-area"
@@ -27,11 +25,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { fetchDashboardPendingSubscriptions } from "./dashboard-subscriptions-action"
 import { hasPaidCalendarMonthForSubscription } from "@/lib/payment-confirmation"
+import { isCompanyInFinancialScope } from "@/lib/monthly-finance"
 import { createClient } from "@/lib/supabase/client"
 import {
-  monthKeyFromDateOnly,
   monthKeyFromHtmlMonth,
+  normalizeSubscriptionPeriodMonths,
+  subscriptionCalendarPaymentDueYmd,
+  subscriptionDebtAppliesToCalendarMonthKey,
 } from "@/lib/subscription-dates"
 
 interface DashboardStats {
@@ -61,12 +63,15 @@ type UpcomingPaymentRow = {
   id_account: number
   clientLabel: string
   accountName: string
-  /** Mes del período activo (misma etiqueta que la barra superior). */
+  /** Mes del período activo (misma etiqueta que la pestaña Periodo del sidebar). */
   pendingMonthLabel: string
   /** Precio al cliente de la cuenta (`account_price_by_client`), pago mensual esperado. */
   monthlyPriceDue: number | null
-  nextPaymentDate: string
-  nextPaymentLabel: string
+  /** Orden en tabla por fecha de pago (sin fecha: al final). */
+  dueInPendingMonthIso: string
+  /** Vencimiento: inicio de servicio + período en meses (`YYYY-MM-DD`); null si falta inicio. */
+  fechaDePagoIso: string | null
+  fechaDePagoLabel: string
   phone: string
   /** WhatsApp o mailto con mensaje de recordatorio; null si no hay contacto usable. */
   notifyUrl: string | null
@@ -92,12 +97,20 @@ type SubscriptionQueryRow = {
         account_price_by_client?: number | null
         /** Día de cobro de la cuenta (Postgres `date`); se usa el día del mes dentro del período pendiente. */
         payment_date?: string | null
+        companies?:
+          | { membership_monthly_cost?: number | null }
+          | { membership_monthly_cost?: number | null }[]
+          | null
       }
     | {
         id_account?: number | null
         account_name?: string | null
         account_price_by_client?: number | null
         payment_date?: string | null
+        companies?:
+          | { membership_monthly_cost?: number | null }
+          | { membership_monthly_cost?: number | null }[]
+          | null
       }[]
     | null
   clients?:
@@ -120,52 +133,6 @@ const pickNested = <T,>(value: T | T[] | null | undefined): T | null => {
   if (value === null || value === undefined) return null
   if (Array.isArray(value)) return value[0] ?? null
   return value
-}
-
-function daysInCalendarMonth(year: number, monthIndex: number): number {
-  return new Date(year, monthIndex + 1, 0).getDate()
-}
-
-/**
- * Fecha de cobro **dentro del mes pendiente** (período activo), usando el día del mes de
- * `accounts.payment_date`. Así la columna no muestra meses posteriores por el ciclo
- * `service_start + period_in_months`. Sin día válido: último día del mes pendiente.
- */
-function dueDateInPendingMonth(
-  selectedMonthKey: string,
-  accountPaymentDate: string | null | undefined
-): string | null {
-  const parts = selectedMonthKey.split("-")
-  const year = Number(parts[0])
-  const monthIndex = Number(parts[1])
-  if (
-    !year ||
-    Number.isNaN(monthIndex) ||
-    monthIndex < 0 ||
-    monthIndex > 11
-  ) {
-    return null
-  }
-
-  let day: number | null = null
-  if (accountPaymentDate) {
-    const dPart = String(accountPaymentDate).split("T")[0]
-    const seg = dPart.split("-")
-    if (seg.length >= 3) {
-      const dd = Number(seg[2])
-      if (!Number.isNaN(dd) && dd >= 1 && dd <= 31) {
-        const dim = daysInCalendarMonth(year, monthIndex)
-        day = Math.min(dd, dim)
-      }
-    }
-  }
-
-  if (day === null) {
-    day = daysInCalendarMonth(year, monthIndex)
-  }
-
-  const calMonth = monthIndex + 1
-  return `${year}-${String(calMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
 function formatShortDate(dateIso: string): string {
@@ -203,7 +170,9 @@ function buildPaymentReminderNotifyUrl(input: {
   monthlyPriceDue: number | null
   /** Mes que debe cerrarse (período activo del panel). */
   pendingMonthLabel: string
-  nextPaymentLabel: string
+  fechaDePagoLabel: string
+  /** Hay fecha calculada (inicio + período en meses); si no, el mensaje indica configurar inicio. */
+  tieneFechaDePago: boolean
 }): string | null {
   const greeting =
     input.clientLabel.trim() !== ""
@@ -213,7 +182,10 @@ function buildPaymentReminderNotifyUrl(input: {
     input.monthlyPriceDue !== null && !Number.isNaN(input.monthlyPriceDue)
       ? `Monto mensual: ${formatMoney(input.monthlyPriceDue)}. `
       : ""
-  const message = `Hola ${greeting}, te recordamos un pago pendiente correspondiente a ${input.pendingMonthLabel}. Cuenta: ${input.accountName}. ${priceSentence}Próximo ciclo de cobro: ${input.nextPaymentLabel}. Gracias.`
+  const fechaSentence = input.tieneFechaDePago
+    ? `Fecha de pago: ${input.fechaDePagoLabel}. `
+    : `Registra la fecha de inicio de servicio en Suscripciones para ver la fecha de pago en el panel. `
+  const message = `Hola ${greeting}, te recordamos un pago pendiente correspondiente a ${input.pendingMonthLabel}. Cuenta: ${input.accountName}. ${priceSentence}${fechaSentence}Gracias.`
 
   const waDigits = digitsOnlyPhone(input.phoneRaw)
   if (waDigits.length >= 8) {
@@ -251,11 +223,24 @@ function buildUpcomingPaymentRows(
           : null
     if (idAccount === null) continue
 
+    if (!isCompanyInFinancialScope(account?.companies)) {
+      continue
+    }
+
     const accountPriceRaw = account?.account_price_by_client
     const accountPrice =
       accountPriceRaw !== null && accountPriceRaw !== undefined
         ? Number(accountPriceRaw)
         : null
+
+    if (
+      !subscriptionDebtAppliesToCalendarMonthKey(
+        sub.service_start_date,
+        selectedMonthKey
+      )
+    ) {
+      continue
+    }
 
     const payments = sub.payments ?? []
     const hasPaidAmountForMonth = hasPaidCalendarMonthForSubscription(
@@ -267,11 +252,24 @@ function buildUpcomingPaymentRows(
 
     if (hasPaidAmountForMonth) continue
 
-    const nextIso = dueDateInPendingMonth(
-      selectedMonthKey,
-      account?.payment_date
+    const periodMonths = normalizeSubscriptionPeriodMonths(sub.period_in_months)
+
+    const serviceStartRaw =
+      sub.service_start_date != null && sub.service_start_date !== undefined
+        ? String(sub.service_start_date).trim()
+        : ""
+
+    const fechaDePagoIso = subscriptionCalendarPaymentDueYmd(
+      serviceStartRaw || null,
+      periodMonths
     )
-    if (!nextIso) continue
+
+    const tieneFechaDePago = Boolean(fechaDePagoIso)
+    const fechaDePagoLabel = fechaDePagoIso
+      ? formatShortDate(fechaDePagoIso)
+      : "Sin inicio"
+
+    const dueInPendingMonthIso = fechaDePagoIso ?? "9999-12-31"
 
     const firstName = client?.name?.trim() ?? ""
     const lastName = client?.lastName?.trim() ?? ""
@@ -285,7 +283,6 @@ function buildUpcomingPaymentRows(
         ? accountPrice
         : null
 
-    const nextPaymentLabel = formatShortDate(nextIso)
     const phoneDisplay = client?.phoneNumber?.trim() || "—"
     const notifyUrl = buildPaymentReminderNotifyUrl({
       phoneRaw: client?.phoneNumber?.trim() ?? "",
@@ -294,7 +291,8 @@ function buildUpcomingPaymentRows(
       accountName,
       monthlyPriceDue,
       pendingMonthLabel,
-      nextPaymentLabel,
+      fechaDePagoLabel,
+      tieneFechaDePago,
     })
 
     mapped.push({
@@ -304,72 +302,23 @@ function buildUpcomingPaymentRows(
       accountName,
       pendingMonthLabel,
       monthlyPriceDue,
-      nextPaymentDate: nextIso,
-      nextPaymentLabel,
+      dueInPendingMonthIso,
+      fechaDePagoIso,
+      fechaDePagoLabel,
       phone: phoneDisplay,
       notifyUrl,
     })
   }
 
   mapped.sort((a, b) => {
-    if (a.nextPaymentDate !== b.nextPaymentDate) {
-      return a.nextPaymentDate.localeCompare(b.nextPaymentDate)
+    if (a.dueInPendingMonthIso !== b.dueInPendingMonthIso) {
+      return a.dueInPendingMonthIso.localeCompare(b.dueInPendingMonthIso)
     }
     return a.clientLabel.localeCompare(b.clientLabel, "es")
   })
 
   return mapped
 }
-
-const QUICK_LINKS: {
-  href: string
-  label: string
-  description: string
-  icon: typeof Radio
-}[] = [
-  {
-    href: "/administration/monthly-finance",
-    label: "Finanzas del mes",
-    description: "Cobros, pendientes y resultado por mes",
-    icon: PiggyBank,
-  },
-  {
-    href: "/administration/accounts",
-    label: "Cuentas",
-    description: "Cuentas de streaming y precios",
-    icon: Radio,
-  },
-  {
-    href: "/administration/clients",
-    label: "Clientes",
-    description: "Personas y suscripciones",
-    icon: Users,
-  },
-  {
-    href: "/administration/companies",
-    label: "Empresas",
-    description: "Empresas asociadas",
-    icon: Building2,
-  },
-  {
-    href: "/administration/cards",
-    label: "Tarjetas",
-    description: "Tarjetas y redes de pago",
-    icon: CreditCard,
-  },
-  {
-    href: "/administration/emails",
-    label: "Correos",
-    description: "Correos vinculados a cuentas",
-    icon: Mail,
-  },
-  {
-    href: "/administration/bank-accounts",
-    label: "Cuentas bancarias",
-    description: "Cuentas donde recibes pagos",
-    icon: Landmark,
-  },
-]
 
 const STAT_CONFIG: {
   key: keyof DashboardStats
@@ -443,7 +392,6 @@ export default function AdministrationDashboardPage() {
         bankAccounts,
         subscriptions,
         payments,
-        { data: subscriptionRows, error: upcomingQueryError },
       ] = await Promise.all([
         countTable("accounts"),
         countTable("clients"),
@@ -453,37 +401,11 @@ export default function AdministrationDashboardPage() {
         countTable("bank_accounts"),
         countTable("subscriptions"),
         countTable("payments"),
-        supabase
-          .from("subscriptions")
-          .select(
-            `
-            id_subscription,
-            id_account,
-            service_start_date,
-            period_in_months,
-            accounts (
-              id_account,
-              account_name,
-              account_price_by_client,
-              payment_date
-            ),
-            clients (
-              name,
-              lastName,
-              phoneNumber,
-              email
-            ),
-            payments (
-              amount,
-              paid_month,
-              payment_reference,
-              receipt_storage_path
-            )
-          `
-          )
-          .order("id_subscription", { ascending: true })
-          .limit(5000),
       ])
+
+      const upcomingRes = await fetchDashboardPendingSubscriptions()
+      const subscriptionRows = upcomingRes.data
+      const upcomingQueryError = upcomingRes.error
 
       setStats({
         accounts,
@@ -496,7 +418,7 @@ export default function AdministrationDashboardPage() {
         payments,
       })
 
-      if (upcomingQueryError) {
+      if (upcomingQueryError !== null) {
         console.error("[dashboard] upcoming subscriptions", upcomingQueryError)
         setUpcomingError(
           "No se pudo cargar la lista de próximos cobros. Intenta de nuevo."
@@ -531,7 +453,7 @@ export default function AdministrationDashboardPage() {
               Dashboard
             </h1>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Resumen de tu operación y accesos rápidos a la administración.
+              Resumen de tu operación.
             </p>
           </div>
         </div>
@@ -615,7 +537,7 @@ export default function AdministrationDashboardPage() {
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
               <CalendarClock className="h-5 w-5" aria-hidden />
             </span>
-            <div className="min-w-0 flex-1 space-y-2">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2 gap-y-2">
                 <h2
                   id="upcoming-payments-heading"
@@ -630,20 +552,9 @@ export default function AdministrationDashboardPage() {
                   Mes: {monthLabel}
                 </span>
               </div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                Aquí entran solo quienes{" "}
-                <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
-                  no tienen el monto completo registrado
-                </strong>{" "}
-                en <strong className="font-semibold">{monthLabel}</strong> (respecto al
-                precio al cliente de la cuenta). Si ya cobraste pero no cargaste referencia o
-                archivo,{" "}
-                <strong className="font-semibold">no</strong> aparecen aquí; revisa eso en{" "}
-                <strong className="font-semibold">Suscripciones</strong> (estado Sin
-                comprobante). Cambia mes en <strong className="font-semibold">Período activo</strong>
-                . &quot;Próximo ciclo&quot; es la fecha de cobro de ese mes según el{" "}
-                <strong className="font-semibold">día de pago de la cuenta</strong>, siempre
-                dentro de <strong className="font-semibold">{monthLabel}</strong>.
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                Solo cuentas cuya empresa tiene costo de membresía configurado;
+                el resto no entra en esta vista de cobros.
               </p>
             </div>
           </div>
@@ -668,9 +579,9 @@ export default function AdministrationDashboardPage() {
                 <th className="whitespace-nowrap px-4 py-3.5">Mes pendiente</th>
                 <th
                   className="whitespace-nowrap px-4 py-3.5"
-                  title="Día de cobro dentro del mes pendiente, tomado del campo «Día de pago» de la cuenta en ese mismo mes calendario."
+                  title="Igual que la columna Fecha de pago en Suscripciones: inicio de servicio + período en meses."
                 >
-                  Próximo ciclo
+                  Fecha de pago
                 </th>
                 <th className="px-4 py-3.5 text-center">
                   Enviar notificación
@@ -697,8 +608,9 @@ export default function AdministrationDashboardPage() {
                     colSpan={8}
                     className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400"
                   >
-                    No hay cobros pendientes para {monthLabel}, o todos los
-                    clientes ya tienen el monto completo registrado ese mes.
+                    No hay cobros pendientes en alcance financiero para{" "}
+                    {monthLabel}, o todos los clientes ya tienen el monto
+                    completo ese mes.
                   </td>
                 </tr>
               ) : (
@@ -724,8 +636,14 @@ export default function AdministrationDashboardPage() {
                     <td className="whitespace-nowrap px-4 py-3 text-zinc-800 dark:text-emerald-100">
                       <span className="font-medium">{row.pendingMonthLabel}</span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-800 dark:text-zinc-200">
-                      {row.nextPaymentLabel}
+                    <td
+                      className={`whitespace-nowrap px-4 py-3 tabular-nums font-medium ${
+                        row.fechaDePagoIso
+                          ? "text-zinc-900 dark:text-emerald-50"
+                          : "text-amber-800 dark:text-amber-200"
+                      }`}
+                    >
+                      {row.fechaDePagoLabel}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {row.notifyUrl ? (
@@ -758,52 +676,6 @@ export default function AdministrationDashboardPage() {
             </tbody>
           </table>
         </TableScrollArea>
-      </section>
-
-      <section aria-labelledby="quick-links-heading" className="space-y-4">
-        <div>
-          <h2
-            id="quick-links-heading"
-            className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
-          >
-            Accesos rápidos
-          </h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Ir directamente a cada módulo de administración.
-          </p>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {QUICK_LINKS.map(
-            ({ href, label, description, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className="group rounded-xl border border-zinc-200/80 bg-white p-4 shadow-sm transition-all hover:border-emerald-300/80 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-emerald-800"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-700 transition-colors group-hover:bg-emerald-100 group-hover:text-emerald-800 dark:bg-zinc-800 dark:text-zinc-200 dark:group-hover:bg-emerald-950/50 dark:group-hover:text-emerald-300">
-                      <Icon className="h-5 w-5" aria-hidden />
-                    </span>
-                    <div>
-                      <p className="font-semibold text-zinc-900 dark:text-zinc-50">
-                        {label}
-                      </p>
-                      <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-                        {description}
-                      </p>
-                    </div>
-                  </div>
-                  <ArrowRight
-                    className="h-5 w-5 shrink-0 text-zinc-400 transition-transform group-hover:translate-x-0.5 group-hover:text-emerald-600 dark:group-hover:text-emerald-400"
-                    aria-hidden
-                  />
-                </div>
-              </Link>
-            )
-          )}
-        </div>
       </section>
     </div>
   )

@@ -1,7 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { createClient as createBrowserClient } from "@/lib/supabase/client"
+import { useCallback, useEffect, useState } from "react"
 import {
   Card,
   CardContent,
@@ -12,73 +11,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { LuCheck, LuCopy, LuRefreshCw } from "react-icons/lu"
 
-type BankAccountRow = {
-  id_bank_account: number
-  account_name: string
-  account_number: string
-  bank_name: string
-}
-
-/** Valores que no son un número de cuenta real (p. ej. fila "Efectivo" con guión o texto). */
-const PLACEHOLDER_ACCOUNT_NUMBERS = new Set(
-  [
-    "-",
-    "—",
-    "–",
-    "--",
-    "...",
-    ".",
-    "n/a",
-    "na",
-    "ninguno",
-    "ninguna",
-    "sin número",
-    "sin numero",
-    "s/n",
-    "sn",
-    "0",
-    "00",
-    "000",
-    "efectivo",
-  ].map((s) => s.toLowerCase())
-)
-
-function normalizeLabel(value: string | null | undefined) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-}
-
-function isShareableBankRow(row: BankAccountRow): boolean {
-  const bank = normalizeLabel(row.bank_name)
-  const titular = normalizeLabel(row.account_name)
-  if (bank === "efectivo" || titular === "efectivo") return false
-
-  const numRaw = String(row.account_number ?? "").trim()
-  if (!numRaw) return false
-
-  const numLower = numRaw.toLowerCase()
-  if (PLACEHOLDER_ACCOUNT_NUMBERS.has(numLower)) return false
-
-  // Solo signos o espacios (p. ej. "— —")
-  if (/^[\s\-–—._/\\]+$/u.test(numRaw)) return false
-
-  // Al menos un dígito (cuenta bancaria suele tener números)
-  if (!/\d/.test(numRaw)) return false
-
-  return true
-}
-
-function filterShareableBankRows(rows: BankAccountRow[] | null): BankAccountRow[] {
-  if (!rows?.length) return []
-  return rows.filter(isShareableBankRow)
-}
+import type { BankAccountShareRow } from "@/lib/bank-accounts-share"
 
 export default function BankAccountsSharePage() {
-  const supabase = useMemo(() => createBrowserClient(), [])
-  const [accounts, setAccounts] = useState<BankAccountRow[]>([])
+  const [accounts, setAccounts] = useState<BankAccountShareRow[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
@@ -94,26 +30,33 @@ export default function BankAccountsSharePage() {
     setLoading(true)
     setErrorMessage(null)
 
-    const { data, error } = await supabase
-      .from("bank_accounts")
-      .select("id_bank_account, account_name, account_number, bank_name")
-      .not("account_number", "is", null)
-      .neq("account_number", "")
-      .order("bank_name", { ascending: true })
+    try {
+      const res = await fetch("/api/public/bank-accounts-share", {
+        cache: "no-store",
+      })
+      const payload = (await res.json()) as {
+        accounts?: BankAccountShareRow[]
+        error?: string
+      }
 
-    if (error) {
-      console.error(error)
-      setErrorMessage(
-        error.message ||
-          "No se pudieron cargar las cuentas. Si eres el administrador, revisa permisos de lectura (RLS) para usuarios anónimos."
-      )
+      if (!res.ok) {
+        console.error(payload)
+        setErrorMessage(
+          payload.error ||
+            "No se pudieron cargar las cuentas. Si eres el administrador, revisa permisos de lectura (RLS para `anon`) o la variable SUPABASE_SERVICE_ROLE_KEY en el servidor."
+        )
+        setAccounts([])
+      } else {
+        setAccounts(payload.accounts ?? [])
+      }
+    } catch (e) {
+      console.error(e)
+      setErrorMessage("No se pudieron cargar las cuentas. Comprueba tu conexión e inténtalo de nuevo.")
       setAccounts([])
-    } else {
-      setAccounts(filterShareableBankRows((data as BankAccountRow[]) ?? []))
     }
 
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     void loadAccounts()

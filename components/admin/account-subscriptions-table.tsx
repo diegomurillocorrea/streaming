@@ -14,6 +14,8 @@ export type SubscriptionPaymentBadgeStatus =
   | "CONFIRMADO"
   | "REGISTRADO"
   | "PENDIENTE"
+  /** El período activo es anterior al mes calendario de `service_start_date`. */
+  | "NO_APLICA"
 
 export type SubscriptionTableRow = {
   id_subscription: number
@@ -36,6 +38,8 @@ export type SubscriptionTableRow = {
   lastPaymentId: number | null
   lastPaymentReference: string | null
   lastPaymentReceiptPath: string | null
+  /** `subscriptions.created_at` — mes en que el cliente se vinculó a la cuenta */
+  subscriptionCreatedAt: string | null
   status: SubscriptionPaymentBadgeStatus
 }
 
@@ -83,15 +87,14 @@ export function AccountSubscriptionsTable({
   const paidMonthFirstDay =
     firstDayFromHtmlMonth(paidMonthHtml) || firstDayOfCurrentMonthLocal()
 
-  const columnCount = pinIncluded ? 14 : 13
+  const columnCount = pinIncluded ? 12 : 11
 
   const filteredRows = useMemo(() => {
     if (!searchQuery.trim()) return rows
     return rows.filter((row) =>
       rowMatchesSearch(
         [
-          row.firstName,
-          row.lastName,
+          `${row.firstName} ${row.lastName}`.trim(),
           row.user,
           row.pin,
           row.phone,
@@ -122,23 +125,29 @@ export function AccountSubscriptionsTable({
           <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-800 dark:bg-emerald-900">
             <tr className="text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-200">
               <th className="w-8 min-w-8 max-w-8 px-2 py-3.5 text-center">#</th>
-              <th className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5">
+              <th className="min-w-[10rem] max-w-[16rem] px-2 py-3.5">
                 Nombre
-              </th>
-              <th className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5">
-                Apellido
               </th>
               <th className="w-[6.5rem] min-w-[6.5rem] max-w-[6.5rem] px-2 py-3.5">User</th>
               {pinIncluded && (
                 <th className="py-3.5 px-4">PIN</th>
               )}
               <th className="py-3.5 px-4">Teléfono</th>
-              <th className="py-3.5 px-4">Inicio de servicio</th>
+              <th
+                className="py-3.5 px-4"
+                title="Mes calendario en que se agregó el cliente a esta cuenta (alta de la suscripción)."
+              >
+                Inicio de servicio
+              </th>
               <th className="py-3.5 px-4 text-center">Período en meses</th>
-              <th className="py-3.5 px-4">Próximo pago</th>
+              <th
+                className="py-3.5 px-4"
+                title="Inicio de servicio + período en meses (mismo día del mes cuando el calendario lo permite). Igual que la columna Fecha de pago en Cobros pendientes del panel."
+              >
+                Fecha de pago
+              </th>
               <th className="py-3.5 px-4">Método de pago</th>
-              <th className="w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] px-2 py-3.5">Pago</th>
-              <th className="min-w-[10rem] px-2 py-3.5">Comprobante</th>
+              <th className="min-w-[11rem] max-w-[18rem] px-2 py-3.5">Pago</th>
               <th className="py-3.5 px-4 text-center">Estado de pago</th>
               <th className="py-3.5 px-4 text-center">Acciones</th>
             </tr>
@@ -165,15 +174,12 @@ export function AccountSubscriptionsTable({
                   <td className="w-8 min-w-8 max-w-8 px-2 py-3.5 align-top text-center text-xs">
                     -
                   </td>
-                  <td className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5 align-top text-xs">
+                  <td className="min-w-[10rem] max-w-[16rem] px-2 py-3.5 align-top text-xs">
                     <AddClientButton
                       accountId={accountId}
                       clients={clientsList ?? []}
                       linkedClientIds={linkedClientIds}
                     />
-                  </td>
-                  <td className="w-[6rem] min-w-[6rem] max-w-[6rem] px-1.5 py-3.5 align-top text-xs">
-                    -
                   </td>
                   <td className="w-[6.5rem] min-w-[6.5rem] max-w-[6.5rem] px-2 py-3.5 align-top text-xs">
                     -
@@ -186,10 +192,9 @@ export function AccountSubscriptionsTable({
                   <td className="py-3.5 px-4 align-top text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-center text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-xs">-</td>
-                  <td className="w-[7.5rem] min-w-[7.5rem] max-w-[7.5rem] px-2 py-3.5 align-top text-xs">
+                  <td className="min-w-[11rem] max-w-[18rem] px-2 py-3.5 align-top text-xs">
                     -
                   </td>
-                  <td className="min-w-[10rem] px-2 py-3.5 align-top text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-center text-xs">-</td>
                   <td className="py-3.5 px-4 align-top text-center text-xs">-</td>
                 </tr>

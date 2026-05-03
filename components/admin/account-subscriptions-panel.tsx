@@ -79,10 +79,10 @@ export const AccountSubscriptionsPanel = ({
         <p className="font-semibold">Pagos por período activo</p>
         <p className="mt-1 text-emerald-900/90 dark:text-emerald-200">
           Estás viendo y editando{" "}
-          <span className="font-medium">{monthLabel}</span> (barra &quot;Período
-          activo&quot; arriba). Si cerraste mes y las fechas de servicio
+          <span className="font-medium">{monthLabel}</span> (pestaña &quot;Periodo&quot;
+          en el menú lateral, encima de tu usuario). Si cerraste mes y las fechas de servicio
           avanzaron, aquí sigues pudiendo registrar o revisar abril u otro mes
-          histórico eligiendo mes y año en la barra global.
+          histórico eligiendo mes y año en el modal de Periodo.
         </p>
       </div>
 
@@ -100,7 +100,7 @@ export const AccountSubscriptionsPanel = ({
             Confirmados ({monthLabel})
           </p>
           <p className="mt-1 text-xs text-zinc-500 dark:text-emerald-500">
-            Monto + comprobante
+            Monto + referencia
           </p>
           <p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">
             {confirmedCount}
@@ -140,7 +140,8 @@ export const AccountSubscriptionsPanel = ({
           <CardTitle className="text-base">Clientes y control de pagos</CardTitle>
           <CardDescription>
             Edita usuario
-            {pinIncluded ? ", PIN" : ""}, fechas y pagos por fila.             El monto y comprobante se guardan para{" "}
+            {pinIncluded ? ", PIN" : ""}, período y pagos por fila. El monto y la
+            referencia se guardan para{" "}
             <span className="font-medium">{monthLabel}</span>. Para considerar un
             pago{" "}
             <strong className="font-semibold text-zinc-800 dark:text-emerald-100">
@@ -148,11 +149,7 @@ export const AccountSubscriptionsPanel = ({
             </strong>{" "}
             hace falta el monto del mes y una{" "}
             <strong className="font-semibold text-zinc-800 dark:text-emerald-100">
-              referencia
-            </strong>{" "}
-            o{" "}
-            <strong className="font-semibold text-zinc-800 dark:text-emerald-100">
-              archivo
+              referencia de transferencia
             </strong>
             . Eliminar una suscripción también elimina sus pagos asociados.
           </CardDescription>

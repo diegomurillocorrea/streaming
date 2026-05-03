@@ -61,3 +61,10 @@ export const parseCompanyMembershipCost = (
   const n = Number(v)
   return Number.isNaN(n) || n < 0 ? 0 : n
 }
+
+/**
+ * Solo cuentas cuya empresa tiene costo de membresía mensual configurado (> 0)
+ * entran en agregados financieros (ej. Gmail sin costo queda fuera de finanzas).
+ */
+export const isCompanyInFinancialScope = (companies: unknown): boolean =>
+  parseCompanyMembershipCost(companies) > 0
