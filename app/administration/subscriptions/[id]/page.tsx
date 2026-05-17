@@ -277,10 +277,6 @@ export default async function AccountSubscriptionsPage({
       ? true
       : Boolean(accountInfo.pin_included)
 
-  const linkedClientIds = list
-    .map((sub) => sub.id_client)
-    .filter((id): id is number => typeof id === "number" && !Number.isNaN(id))
-
   const subscriptionsPayload = list as SubscriptionPayloadRow[]
 
   return (
@@ -370,7 +366,6 @@ export default async function AccountSubscriptionsPage({
             phoneNumber: c.phoneNumber ?? null,
           }))
         }
-        linkedClientIds={linkedClientIds}
         bankAccounts={(bankAccounts ?? []).map((b) => ({
           id_bank_account: b.id_bank_account,
           bank_name: b.bank_name,

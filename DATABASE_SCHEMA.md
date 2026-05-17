@@ -21,8 +21,8 @@ Support tables:
 
 - One `company` has many `accounts`
 - One `email` can be used by many `accounts`
-- One `account` has many `subscriptions`
-- One `client` can have many `subscriptions`
+- One `account` has many `subscriptions` (including multiple rows for the same `client`)
+- One `client` can have many `subscriptions` (across accounts or repeated on the same account)
 - One `subscription` has many `payments`
 - One `bank_account` can be used in many `payments`
 - One `payment_network` has many `cards`
@@ -104,8 +104,7 @@ create table if not exists subscriptions (
   service_start_date date null,
   service_end_date date null,
   period_in_months integer null check (period_in_months is null or period_in_months > 0),
-  created_at timestamptz not null default now(),
-  unique (id_account, id_client)
+  created_at timestamptz not null default now()
 );
 
 create table if not exists payments (

@@ -34,7 +34,6 @@ type AccountSubscriptionsPanelProps = {
   accountId: number
   subscriptionsPayload: SubscriptionPayloadRow[]
   clientsList: ClientOption[]
-  linkedClientIds: number[]
   bankAccounts: BankAccountOption[]
   accountPrice: number | null
   pinIncluded: boolean
@@ -46,7 +45,6 @@ export const AccountSubscriptionsPanel = ({
   accountId,
   subscriptionsPayload,
   clientsList,
-  linkedClientIds,
   bankAccounts,
   accountPrice,
   pinIncluded,
@@ -161,7 +159,6 @@ export const AccountSubscriptionsPanel = ({
             rows={rows}
             emptySlots={emptySlots}
             clientsList={clientsList}
-            linkedClientIds={linkedClientIds}
             bankAccounts={bankAccounts}
             accountPrice={accountPrice}
             pinIncluded={pinIncluded}

@@ -63,8 +63,6 @@ type AccountSubscriptionsTableProps = {
   rows: SubscriptionTableRow[]
   emptySlots: number
   clientsList: ClientOption[]
-  /** Clientes ya vinculados a esta cuenta (no se ofrecen en &quot;Agregar cliente&quot;) */
-  linkedClientIds: number[]
   bankAccounts: BankAccountOption[]
   accountPrice: number | null
   /** Viene de `accounts.pin_included`: mostrar columna PIN */
@@ -77,7 +75,6 @@ export function AccountSubscriptionsTable({
   rows,
   emptySlots,
   clientsList,
-  linkedClientIds,
   bankAccounts,
   accountPrice,
   pinIncluded,
@@ -178,7 +175,6 @@ export function AccountSubscriptionsTable({
                     <AddClientButton
                       accountId={accountId}
                       clients={clientsList ?? []}
-                      linkedClientIds={linkedClientIds}
                     />
                   </td>
                   <td className="w-[6.5rem] min-w-[6.5rem] max-w-[6.5rem] px-2 py-3.5 align-top text-xs">

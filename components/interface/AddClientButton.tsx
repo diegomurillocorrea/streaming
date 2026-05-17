@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient as createBrowserClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -26,14 +26,9 @@ type ClientOption = {
 type AddClientButtonProps = {
   accountId: number
   clients: ClientOption[]
-  linkedClientIds: number[]
 }
 
-export function AddClientButton({
-  accountId,
-  clients,
-  linkedClientIds,
-}: AddClientButtonProps) {
+export function AddClientButton({ accountId, clients }: AddClientButtonProps) {
   const [open, setOpen] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState("")
   const [loading, setLoading] = useState(false)
@@ -42,10 +37,8 @@ export function AddClientButton({
   const supabase = createBrowserClient()
   const router = useRouter()
 
-  const availableClients = useMemo(() => {
-    const linked = new Set(linkedClientIds)
-    return (clients ?? []).filter((c) => !linked.has(c.id_client))
-  }, [clients, linkedClientIds])
+  const clientOptions = clients ?? []
+  const hasClients = clientOptions.length > 0
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next)
@@ -77,11 +70,7 @@ export function AddClientButton({
 
     if (error) {
       console.error(error)
-      const msg =
-        error.code === "23505"
-          ? "Ese cliente ya está vinculado a esta cuenta."
-          : error.message || "Error al crear la suscripción"
-      setSaveError(msg)
+      setSaveError(error.message || "Error al crear la suscripción")
       return
     }
 
@@ -97,10 +86,10 @@ export function AddClientButton({
         variant="outline"
         className="cursor-pointer border-zinc-300 text-xs hover:bg-zinc-50 dark:border-emerald-400/60"
         onClick={() => setOpen(true)}
-        disabled={availableClients.length === 0}
+        disabled={!hasClients}
         title={
-          availableClients.length === 0
-            ? "No hay clientes disponibles para vincular"
+          !hasClients
+            ? "No hay clientes registrados en el catálogo"
             : undefined
         }
       >
@@ -115,7 +104,7 @@ export function AddClientButton({
             </DialogTitle>
             <DialogDescription className="text-xs text-zinc-600 dark:text-emerald-300">
               Busca por nombre, apellido, teléfono o correo, o elige un cliente de la lista.
-              Máximo 5 suscripciones por cuenta.
+              Puedes vincular el mismo cliente más de una vez. Máximo 5 suscripciones por cuenta.
             </DialogDescription>
           </DialogHeader>
 
@@ -123,19 +112,18 @@ export function AddClientButton({
             <Label htmlFor="add-client-combobox" className="text-xs">
               Elegir cliente
             </Label>
-            {availableClients.length === 0 ? (
+            {!hasClients ? (
               <p
                 className="rounded-md border border-dashed border-zinc-200 px-3 py-2 text-sm text-zinc-500 dark:border-emerald-800 dark:text-emerald-300"
                 role="status"
               >
-                Todos los clientes ya están vinculados a esta cuenta o no hay clientes
-                registrados. Crea clientes en Administración → Clientes.
+                No hay clientes registrados. Crea clientes en Administración → Clientes.
               </p>
             ) : (
               <ClientSearchCombobox
                 id="add-client-combobox"
                 dialogOpen={open}
-                clients={availableClients}
+                clients={clientOptions}
                 value={selectedClientId}
                 onValueChange={setSelectedClientId}
                 disabled={loading}
@@ -163,7 +151,7 @@ export function AddClientButton({
               size="sm"
               className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
               onClick={handleCreate}
-              disabled={loading || !selectedClientId || availableClients.length === 0}
+              disabled={loading || !selectedClientId || !hasClients}
             >
               {loading ? "Guardando…" : "Agregar cliente"}
             </Button>
