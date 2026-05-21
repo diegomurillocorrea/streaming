@@ -52,6 +52,7 @@ import {
   parseMaxClientsFormValue,
 } from "@/lib/account-max-clients";
 import { canAccessAccountSubscriptionsPage } from "@/lib/account-subscriptions-access";
+import { formatSupabaseError } from "@/lib/format-supabase-error";
 import { rowMatchesSearch } from "@/lib/table-search";
 
 /**
@@ -108,6 +109,7 @@ export default function AdminAccountsPage() {
   const [companies, setCompanies] = useState([]);
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
@@ -178,6 +180,7 @@ export default function AdminAccountsPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     const supabase = createBrowserClient();
 
     const [
@@ -219,9 +222,17 @@ export default function AdminAccountsPage() {
         .order("email_address", { ascending: true }),
     ]);
 
-    if (accountsError) console.error("accounts error =>", accountsError);
-    if (companiesError) console.error("companies error =>", companiesError);
-    if (emailsError) console.error("emails error =>", emailsError);
+    if (accountsError) {
+      const msg = formatSupabaseError(accountsError, "No se pudieron cargar las cuentas.");
+      console.error("accounts error =>", msg, accountsError);
+      setLoadError(msg);
+    }
+    if (companiesError) {
+      console.error("companies error =>", formatSupabaseError(companiesError), companiesError);
+    }
+    if (emailsError) {
+      console.error("emails error =>", formatSupabaseError(emailsError), emailsError);
+    }
 
     setAccounts(accountsData ?? []);
     setCompanies(companiesData ?? []);
@@ -414,6 +425,15 @@ export default function AdminAccountsPage() {
           </Button>
         </div>
       </header>
+
+      {loadError && (
+        <p
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200"
+          role="alert"
+        >
+          {loadError}
+        </p>
+      )}
 
       <Card className="border border-zinc-200 bg-white shadow-sm dark:border-emerald-800 dark:bg-emerald-900/60">
         <CardHeader>
