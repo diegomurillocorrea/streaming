@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient as createBrowserClient } from "@/lib/supabase/client"
+import { accountAtMaxClientsMessage } from "@/lib/account-max-clients"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -26,9 +27,16 @@ type ClientOption = {
 type AddClientButtonProps = {
   accountId: number
   clients: ClientOption[]
+  maxClients: number
+  currentCount: number
 }
 
-export function AddClientButton({ accountId, clients }: AddClientButtonProps) {
+export function AddClientButton({
+  accountId,
+  clients,
+  maxClients,
+  currentCount,
+}: AddClientButtonProps) {
   const [open, setOpen] = useState(false)
   const [selectedClientId, setSelectedClientId] = useState("")
   const [loading, setLoading] = useState(false)
@@ -39,8 +47,10 @@ export function AddClientButton({ accountId, clients }: AddClientButtonProps) {
 
   const clientOptions = clients ?? []
   const hasClients = clientOptions.length > 0
+  const atCapacity = currentCount >= maxClients
 
   const handleOpenChange = (next: boolean) => {
+    if (atCapacity && next) return
     setOpen(next)
     if (!next) {
       setSelectedClientId("")
@@ -54,6 +64,25 @@ export function AddClientButton({ accountId, clients }: AddClientButtonProps) {
 
     setLoading(true)
     setSaveError(null)
+
+    const { count, error: countError } = await supabase
+      .from("subscriptions")
+      .select("*", { count: "exact", head: true })
+      .eq("id_account", accountId)
+
+    if (countError) {
+      setLoading(false)
+      console.error(countError)
+      setSaveError(countError.message || "No se pudo verificar los cupos de la cuenta")
+      return
+    }
+
+    const liveCount = count ?? currentCount
+    if (liveCount >= maxClients) {
+      setLoading(false)
+      setSaveError(accountAtMaxClientsMessage(maxClients, liveCount))
+      return
+    }
 
     const today = new Date().toISOString().slice(0, 10)
 
@@ -79,18 +108,21 @@ export function AddClientButton({ accountId, clients }: AddClientButtonProps) {
     router.refresh()
   }
 
+  const capacityTitle = atCapacity
+    ? `Esta cuenta ya tiene ${currentCount} de ${maxClients} cupos ocupados`
+    : undefined
+
   return (
     <>
       <Button
         size="sm"
         variant="outline"
         className="cursor-pointer border-zinc-300 text-xs hover:bg-zinc-50 dark:border-emerald-400/60"
-        onClick={() => setOpen(true)}
-        disabled={!hasClients}
+        onClick={() => handleOpenChange(true)}
+        disabled={!hasClients || atCapacity}
         title={
-          !hasClients
-            ? "No hay clientes registrados en el catálogo"
-            : undefined
+          capacityTitle ??
+          (!hasClients ? "No hay clientes registrados en el catálogo" : undefined)
         }
       >
         Agregar cliente
@@ -104,7 +136,9 @@ export function AddClientButton({ accountId, clients }: AddClientButtonProps) {
             </DialogTitle>
             <DialogDescription className="text-xs text-zinc-600 dark:text-emerald-300">
               Busca por nombre, apellido, teléfono o correo, o elige un cliente de la lista.
-              Puedes vincular el mismo cliente más de una vez. Máximo 5 suscripciones por cuenta.
+              Puedes vincular el mismo cliente más de una vez. Máximo {maxClients}{" "}
+              suscripción{maxClients === 1 ? "" : "es"} por cuenta ({currentCount}/
+              {maxClients} en uso).
             </DialogDescription>
           </DialogHeader>
 
@@ -151,7 +185,7 @@ export function AddClientButton({ accountId, clients }: AddClientButtonProps) {
               size="sm"
               className="cursor-pointer bg-emerald-600 text-white hover:bg-emerald-700"
               onClick={handleCreate}
-              disabled={loading || !selectedClientId || !hasClients}
+              disabled={loading || !selectedClientId || !hasClients || atCapacity}
             >
               {loading ? "Guardando…" : "Agregar cliente"}
             </Button>

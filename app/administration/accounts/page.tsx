@@ -44,6 +44,13 @@ import { LuPlus, LuPencil, LuTrash2, LuRefreshCw } from "react-icons/lu";
 
 import { TableScrollArea } from "@/components/admin/table-scroll-area";
 import { TableSearchInput } from "@/components/admin/table-search-input";
+import {
+  DEFAULT_MAX_CLIENTS,
+  MAX_MAX_CLIENTS,
+  MIN_MAX_CLIENTS,
+  maxClientsBelowSubscriptionCountMessage,
+  parseMaxClientsFormValue,
+} from "@/lib/account-max-clients";
 import { canAccessAccountSubscriptionsPage } from "@/lib/account-subscriptions-access";
 import { rowMatchesSearch } from "@/lib/table-search";
 
@@ -105,6 +112,7 @@ export default function AdminAccountsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -149,6 +157,7 @@ export default function AdminAccountsPage() {
           acc.account_price_by_client != null
             ? String(acc.account_price_by_client)
             : "",
+          acc.max_clients != null ? String(acc.max_clients) : "",
         ],
         tableSearch
       );
@@ -164,6 +173,7 @@ export default function AdminAccountsPage() {
     payment_date: "",
     account_price_by_client: "",
     pin_included: true,
+    max_clients: String(DEFAULT_MAX_CLIENTS),
   });
 
   const loadData = useCallback(async () => {
@@ -188,6 +198,7 @@ export default function AdminAccountsPage() {
           created_at,
           account_price_by_client,
           pin_included,
+          max_clients,
           companies (
             company_name,
             membership_monthly_cost
@@ -228,6 +239,7 @@ export default function AdminAccountsPage() {
 
   function openCreateDialog() {
     setEditingAccount(null);
+    setSaveError(null);
     setForm({
       account_name: "",
       id_company: "",
@@ -236,12 +248,14 @@ export default function AdminAccountsPage() {
       payment_date: "",
       account_price_by_client: "",
       pin_included: true,
+      max_clients: String(DEFAULT_MAX_CLIENTS),
     });
     setIsDialogOpen(true);
   }
 
   function openEditDialog(account) {
     setEditingAccount(account);
+    setSaveError(null);
     setForm({
       account_name: account.account_name ?? "",
       id_company: account.id_company ? String(account.id_company) : "",
@@ -257,6 +271,10 @@ export default function AdminAccountsPage() {
         account.pin_included === null || account.pin_included === undefined
           ? true
           : Boolean(account.pin_included),
+      max_clients:
+        account.max_clients !== null && account.max_clients !== undefined
+          ? String(account.max_clients)
+          : String(DEFAULT_MAX_CLIENTS),
     });
     setIsDialogOpen(true);
   }
@@ -264,7 +282,43 @@ export default function AdminAccountsPage() {
   async function handleSave(e) {
     e.preventDefault();
     setSaving(true);
+    setSaveError(null);
     const supabase = createBrowserClient();
+
+    const maxClientsParsed = parseMaxClientsFormValue(form.max_clients);
+    if (maxClientsParsed.ok === false) {
+      setSaveError(maxClientsParsed.message);
+      setSaving(false);
+      return;
+    }
+
+    if (editingAccount) {
+      const { count, error: countError } = await supabase
+        .from("subscriptions")
+        .select("*", { count: "exact", head: true })
+        .eq("id_account", editingAccount.id_account);
+
+      if (countError) {
+        console.error("subscription count error =>", countError);
+        setSaveError(
+          countError.message || "No se pudo verificar las suscripciones de la cuenta"
+        );
+        setSaving(false);
+        return;
+      }
+
+      const subscriptionCount = count ?? 0;
+      if (maxClientsParsed.value < subscriptionCount) {
+        setSaveError(
+          maxClientsBelowSubscriptionCountMessage(
+            maxClientsParsed.value,
+            subscriptionCount
+          )
+        );
+        setSaving(false);
+        return;
+      }
+    }
 
     const payload = {
       account_name: form.account_name.trim(),
@@ -278,6 +332,7 @@ export default function AdminAccountsPage() {
           ? null
           : Number.parseFloat(form.account_price_by_client),
       pin_included: Boolean(form.pin_included),
+      max_clients: maxClientsParsed.value,
     };
 
     let error;
@@ -297,6 +352,7 @@ export default function AdminAccountsPage() {
 
     if (error) {
       console.error("save account error =>", error);
+      setSaveError(error.message || "Error al guardar la cuenta");
     } else {
       setIsDialogOpen(false);
       await loadData();
@@ -371,7 +427,7 @@ export default function AdminAccountsPage() {
             id="accounts-table-search"
             value={tableSearch}
             onChange={setTableSearch}
-            placeholder="Buscar por ID, cuenta, servicio, email, costo o precio al cliente…"
+            placeholder="Buscar por ID, cuenta, servicio, email, cupos, costo o precio al cliente…"
             aria-label="Buscar en la lista de cuentas"
           />
           <TableScrollArea>
@@ -383,6 +439,7 @@ export default function AdminAccountsPage() {
                   <th className="py-3.5 px-4">Servicio</th>
                   <th className="py-3.5 px-4">Email</th>
                   <th className="py-3.5 px-4">Día de pago</th>
+                  <th className="py-3.5 px-4 text-center">Cupos</th>
                   <th
                     className="py-3.5 px-4 text-right"
                     title="Definido en Empresas por servicio"
@@ -396,19 +453,19 @@ export default function AdminAccountsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
+                    <td colSpan={9} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
                       Cargando cuentas...
                     </td>
                   </tr>
                 ) : accounts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
+                    <td colSpan={9} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
                       Aún no hay cuentas. Haz clic en &quot;Nueva cuenta&quot; para agregar la primera.
                     </td>
                   </tr>
                 ) : filteredAccounts.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
+                    <td colSpan={9} className="py-8 px-4 text-center text-sm text-zinc-500 dark:text-emerald-300">
                       No hay resultados para &quot;{tableSearch.trim()}&quot;.
                     </td>
                   </tr>
@@ -460,6 +517,9 @@ export default function AdminAccountsPage() {
                       <td className="py-3.5 px-4 align-middle text-zinc-600 dark:text-emerald-200">
                         {acc.payment_date ? formatDate(acc.payment_date) : "-"}
                       </td>
+                      <td className="py-3.5 px-4 align-middle text-center tabular-nums text-zinc-700 dark:text-emerald-100">
+                        {acc.max_clients ?? DEFAULT_MAX_CLIENTS}
+                      </td>
                       <td className="py-3.5 px-4 align-middle text-right text-zinc-600 dark:text-emerald-200">
                         {rowMembershipCost != null
                           ? `$${rowMembershipCost.toFixed(2)}`
@@ -502,7 +562,13 @@ export default function AdminAccountsPage() {
       </Card>
 
         {/* DIALOGO CREAR / EDITAR */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog
+        open={isDialogOpen}
+        onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setSaveError(null);
+        }}
+      >
         <DialogContent className="border-zinc-200 bg-white text-zinc-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-white">
             <DialogHeader>
               <DialogTitle className="text-lg font-semibold">
@@ -635,7 +701,7 @@ export default function AdminAccountsPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2">
                   <Label htmlFor="payment_date">Día de pago</Label>
                   <Input
                     id="payment_date"
@@ -647,6 +713,34 @@ export default function AdminAccountsPage() {
                         payment_date: e.target.value,
                       }))
                     }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="max_clients">Cupos máximos</Label>
+                  <p
+                    id="max_clients_desc"
+                    className="text-xs text-zinc-500 dark:text-emerald-400"
+                  >
+                    Suscripciones permitidas en esta cuenta ({MIN_MAX_CLIENTS}–
+                    {MAX_MAX_CLIENTS}).
+                  </p>
+                  <Input
+                    id="max_clients"
+                    type="number"
+                    min={MIN_MAX_CLIENTS}
+                    max={MAX_MAX_CLIENTS}
+                    step={1}
+                    value={form.max_clients}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        max_clients: e.target.value,
+                      }))
+                    }
+                    className="border-zinc-200 bg-white text-sm text-zinc-900 dark:bg-emerald-900 dark:border-emerald-700 dark:text-emerald-50"
+                    aria-describedby="max_clients_desc"
+                    required
                   />
                 </div>
 
@@ -679,6 +773,12 @@ export default function AdminAccountsPage() {
                   </div>
                 </div>
               </div>
+
+              {saveError && (
+                <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                  {saveError}
+                </p>
+              )}
 
               <DialogFooter>
                 <Button

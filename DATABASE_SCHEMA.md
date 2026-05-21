@@ -21,7 +21,7 @@ Support tables:
 
 - One `company` has many `accounts`
 - One `email` can be used by many `accounts`
-- One `account` has many `subscriptions` (including multiple rows for the same `client`)
+- One `account` has many `subscriptions` (including multiple rows for the same `client`), capped by `accounts.max_clients` (1–10, default 5; enforced in the app)
 - One `client` can have many `subscriptions` (across accounts or repeated on the same account)
 - One `subscription` has many `payments`
 - One `bank_account` can be used in many `payments`
@@ -91,6 +91,7 @@ create table if not exists accounts (
   password text not null default '',
   payment_date date null,
   price numeric(10, 2) null check (price is null or price >= 0),
+  max_clients integer not null default 5 check (max_clients between 1 and 10),
   created_at timestamptz not null default now(),
   unique (account_name, id_company)
 );

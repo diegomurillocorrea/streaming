@@ -62,6 +62,8 @@ type AccountSubscriptionsTableProps = {
   paidMonthHtml: string
   rows: SubscriptionTableRow[]
   emptySlots: number
+  maxClients: number
+  subscriptionCount: number
   clientsList: ClientOption[]
   bankAccounts: BankAccountOption[]
   accountPrice: number | null
@@ -74,6 +76,8 @@ export function AccountSubscriptionsTable({
   paidMonthHtml,
   rows,
   emptySlots,
+  maxClients,
+  subscriptionCount,
   clientsList,
   bankAccounts,
   accountPrice,
@@ -175,6 +179,8 @@ export function AccountSubscriptionsTable({
                     <AddClientButton
                       accountId={accountId}
                       clients={clientsList ?? []}
+                      maxClients={maxClients}
+                      currentCount={subscriptionCount}
                     />
                   </td>
                   <td className="w-[6.5rem] min-w-[6.5rem] max-w-[6.5rem] px-2 py-3.5 align-top text-xs">

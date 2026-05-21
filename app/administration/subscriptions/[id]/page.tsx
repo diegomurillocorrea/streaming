@@ -4,6 +4,7 @@ import { createClient as createServerClient } from "@/utils/supabase/server"
 import { AccountSubscriptionsPanel } from "@/components/admin/account-subscriptions-panel"
 import { FinishMonthButton } from "@/components/interface/FinishMonthButton"
 import { CopyAccountCredentialsButton } from "@/components/interface/copy-account-credentials-button"
+import { getMaxClients } from "@/lib/account-max-clients"
 import { accountLacksPaymentDayAndPrice } from "@/lib/account-subscriptions-access"
 import type { SubscriptionPayloadRow } from "@/lib/build-subscription-table-rows"
 
@@ -164,6 +165,7 @@ export default async function AccountSubscriptionsPage({
         payment_date,
         account_price_by_client,
         pin_included,
+        max_clients,
         companies ( company_name, membership_monthly_cost ),
         emails ( email_address )
       `
@@ -277,6 +279,8 @@ export default async function AccountSubscriptionsPage({
       ? true
       : Boolean(accountInfo.pin_included)
 
+  const maxClients = getMaxClients(accountInfo)
+
   const subscriptionsPayload = list as SubscriptionPayloadRow[]
 
   return (
@@ -356,6 +360,7 @@ export default async function AccountSubscriptionsPage({
 
       <AccountSubscriptionsPanel
         accountId={accountId}
+        maxClients={maxClients}
         subscriptionsPayload={subscriptionsPayload}
         clientsList={
           (clientsList ?? []).map((c) => ({

@@ -32,6 +32,7 @@ type ClientOption = {
 
 type AccountSubscriptionsPanelProps = {
   accountId: number
+  maxClients: number
   subscriptionsPayload: SubscriptionPayloadRow[]
   clientsList: ClientOption[]
   bankAccounts: BankAccountOption[]
@@ -39,10 +40,9 @@ type AccountSubscriptionsPanelProps = {
   pinIncluded: boolean
 }
 
-const MAX_SLOTS = 5
-
 export const AccountSubscriptionsPanel = ({
   accountId,
+  maxClients,
   subscriptionsPayload,
   clientsList,
   bankAccounts,
@@ -66,7 +66,8 @@ export const AccountSubscriptionsPanel = ({
     [subscriptionsPayload, selectedMonthKey, accountPrice]
   )
 
-  const emptySlots = Math.max(MAX_SLOTS - subscriptionsPayload.length, 0)
+  const subscriptionCount = subscriptionsPayload.length
+  const emptySlots = Math.max(maxClients - subscriptionCount, 0)
 
   return (
     <>
@@ -90,7 +91,7 @@ export const AccountSubscriptionsPanel = ({
             Cupos usados
           </p>
           <p className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-emerald-50">
-            {subscriptionsPayload.length}/{MAX_SLOTS}
+            {subscriptionCount}/{maxClients}
           </p>
         </div>
         <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-4 dark:border-emerald-800 dark:bg-emerald-950/40">
@@ -158,6 +159,8 @@ export const AccountSubscriptionsPanel = ({
             paidMonthHtml={htmlMonth}
             rows={rows}
             emptySlots={emptySlots}
+            maxClients={maxClients}
+            subscriptionCount={subscriptionCount}
             clientsList={clientsList}
             bankAccounts={bankAccounts}
             accountPrice={accountPrice}
