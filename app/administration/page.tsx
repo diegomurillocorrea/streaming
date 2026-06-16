@@ -34,6 +34,7 @@ import {
   normalizeSubscriptionPeriodMonths,
   subscriptionCalendarPaymentDueYmd,
   subscriptionDebtAppliesToCalendarMonthKey,
+  subscriptionPaymentDueSortYmdInPendingMonth,
 } from "@/lib/subscription-dates"
 
 interface DashboardStats {
@@ -269,7 +270,11 @@ function buildUpcomingPaymentRows(
       ? formatShortDate(fechaDePagoIso)
       : "Sin inicio"
 
-    const dueInPendingMonthIso = fechaDePagoIso ?? "9999-12-31"
+    const dueInPendingMonthIso = subscriptionPaymentDueSortYmdInPendingMonth(
+      selectedMonthKey,
+      fechaDePagoIso,
+      account?.payment_date ?? null
+    )
 
     const firstName = client?.name?.trim() ?? ""
     const lastName = client?.lastName?.trim() ?? ""
@@ -311,9 +316,13 @@ function buildUpcomingPaymentRows(
   }
 
   mapped.sort((a, b) => {
-    if (a.dueInPendingMonthIso !== b.dueInPendingMonthIso) {
-      return a.dueInPendingMonthIso.localeCompare(b.dueInPendingMonthIso)
-    }
+    const byDueDay = a.dueInPendingMonthIso.localeCompare(b.dueInPendingMonthIso)
+    if (byDueDay !== 0) return byDueDay
+
+    const fullA = a.fechaDePagoIso ?? ""
+    const fullB = b.fechaDePagoIso ?? ""
+    if (fullA !== fullB) return fullA.localeCompare(fullB)
+
     return a.clientLabel.localeCompare(b.clientLabel, "es")
   })
 

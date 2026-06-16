@@ -232,3 +232,32 @@ export function paidMonthCalendarMonthKeys(
   }
   return keys
 }
+
+/**
+ * Clave `YYYY-MM-DD` para ordenar cobros pendientes del mes activo (día 1–31).
+ * Usa el día de `fechaDePagoIso` o, si falta, el de `accounts.payment_date`.
+ * Sin día usable → `9999-12-31` (al final).
+ */
+export function subscriptionPaymentDueSortYmdInPendingMonth(
+  selectedMonthKey: string,
+  fechaDePagoIso: string | null | undefined,
+  accountPaymentDate: string | null | undefined
+): string {
+  const [yearRaw, monthIndexRaw] = selectedMonthKey.split("-")
+  const year = Number(yearRaw)
+  const monthIndex = Number(monthIndexRaw)
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) {
+    return fechaDePagoIso?.split("T")[0] ?? "9999-12-31"
+  }
+
+  const month = monthIndex + 1
+  const day =
+    paymentDayOfMonthFromAccountDate(fechaDePagoIso) ??
+    paymentDayOfMonthFromAccountDate(accountPaymentDate)
+
+  if (day === null) return "9999-12-31"
+
+  const maxDay = daysInCalendarMonthLocal(year, monthIndex)
+  const clamped = Math.min(Math.max(day, 1), maxDay)
+  return `${year}-${String(month).padStart(2, "0")}-${String(clamped).padStart(2, "0")}`
+}
