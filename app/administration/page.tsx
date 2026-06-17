@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 
 import { TableScrollArea } from "@/components/admin/table-scroll-area"
+import { TableSearchInput } from "@/components/admin/table-search-input"
 import { useAdminPeriod } from "@/components/providers/admin-period-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,7 +26,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { fetchDashboardAllProfiles } from "./dashboard-profiles-action"
 import { fetchDashboardPendingSubscriptions } from "./dashboard-subscriptions-action"
+import { rowMatchesSearch } from "@/lib/table-search"
 import { hasPaidCalendarMonthForSubscription } from "@/lib/payment-confirmation"
 import { isCompanyInFinancialScope } from "@/lib/monthly-finance"
 import { createClient } from "@/lib/supabase/client"
@@ -57,6 +60,48 @@ const EMPTY_STATS: DashboardStats = {
   bankAccounts: 0,
   subscriptions: 0,
   payments: 0,
+}
+
+type ProfileQueryRow = {
+  id_subscription: number
+  id_account?: number | null
+  user?: string | null
+  pin?: string | null
+  accounts?:
+    | {
+        id_account?: number | null
+        account_name?: string | null
+        pin_included?: boolean | null
+      }
+    | {
+        id_account?: number | null
+        account_name?: string | null
+        pin_included?: boolean | null
+      }[]
+    | null
+  clients?:
+    | {
+        name?: string | null
+        lastName?: string | null
+        phoneNumber?: string | null
+      }
+    | {
+        name?: string | null
+        lastName?: string | null
+        phoneNumber?: string | null
+      }[]
+    | null
+}
+
+type ProfileRow = {
+  id_subscription: number
+  id_account: number
+  clientLabel: string
+  accountName: string
+  phone: string
+  user: string
+  pin: string
+  pinIncluded: boolean
 }
 
 type UpcomingPaymentRow = {
@@ -203,6 +248,51 @@ function buildPaymentReminderNotifyUrl(input: {
   }
 
   return null
+}
+
+function buildProfileRows(list: ProfileQueryRow[]): ProfileRow[] {
+  const mapped: ProfileRow[] = []
+
+  for (const sub of list) {
+    const account = pickNested(sub.accounts)
+    const client = pickNested(sub.clients)
+
+    const idAccount =
+      typeof account?.id_account === "number"
+        ? account.id_account
+        : typeof sub.id_account === "number"
+          ? sub.id_account
+          : null
+    if (idAccount === null) continue
+
+    const firstName = client?.name?.trim() ?? ""
+    const lastName = client?.lastName?.trim() ?? ""
+    const clientLabel = [firstName, lastName].filter(Boolean).join(" ")
+    const accountName = account?.account_name?.trim() || `Cuenta ${idAccount}`
+    const phone = client?.phoneNumber?.trim() || "—"
+    const user = sub.user?.trim() || "—"
+    const pin = sub.pin?.trim() || "—"
+    const pinIncluded = Boolean(account?.pin_included)
+
+    mapped.push({
+      id_subscription: sub.id_subscription,
+      id_account: idAccount,
+      clientLabel: clientLabel || "Cliente sin nombre",
+      accountName,
+      phone,
+      user,
+      pin,
+      pinIncluded,
+    })
+  }
+
+  mapped.sort((a, b) => {
+    const byAccount = a.accountName.localeCompare(b.accountName, "es")
+    if (byAccount !== 0) return byAccount
+    return a.clientLabel.localeCompare(b.clientLabel, "es")
+  })
+
+  return mapped
 }
 
 function buildUpcomingPaymentRows(
@@ -353,6 +443,9 @@ export default function AdministrationDashboardPage() {
   const [subscriptionRowsForUpcoming, setSubscriptionRowsForUpcoming] = useState<
     SubscriptionQueryRow[]
   >([])
+  const [profileRowsRaw, setProfileRowsRaw] = useState<ProfileQueryRow[]>([])
+  const [profilesError, setProfilesError] = useState<string | null>(null)
+  const [profilesSearch, setProfilesSearch] = useState("")
   const [upcomingError, setUpcomingError] = useState<string | null>(null)
 
   const isLoadingUi = !hasMounted || loading
@@ -360,6 +453,26 @@ export default function AdministrationDashboardPage() {
   const selectedMonthKey = useMemo(
     () => monthKeyFromHtmlMonth(htmlMonth),
     [htmlMonth]
+  )
+
+  const profileRows = useMemo(
+    () => buildProfileRows(profileRowsRaw),
+    [profileRowsRaw]
+  )
+
+  const filteredProfileRows = useMemo(() => {
+    if (!profilesSearch.trim()) return profileRows
+    return profileRows.filter((row) =>
+      rowMatchesSearch(
+        [row.clientLabel, row.accountName, row.phone, row.user],
+        profilesSearch
+      )
+    )
+  }, [profileRows, profilesSearch])
+
+  const showPinColumn = useMemo(
+    () => profileRows.some((row) => row.pinIncluded),
+    [profileRows]
   )
 
   const upcomingRows = useMemo(
@@ -376,6 +489,7 @@ export default function AdministrationDashboardPage() {
     setLoading(true)
     setLoadError(null)
     setUpcomingError(null)
+    setProfilesError(null)
     const supabase = createClient()
 
     const countTable = async (table: string) => {
@@ -412,9 +526,13 @@ export default function AdministrationDashboardPage() {
         countTable("payments"),
       ])
 
-      const upcomingRes = await fetchDashboardPendingSubscriptions()
+      const [upcomingRes, profilesRes] = await Promise.all([
+        fetchDashboardPendingSubscriptions(),
+        fetchDashboardAllProfiles(),
+      ])
       const subscriptionRows = upcomingRes.data
       const upcomingQueryError = upcomingRes.error
+      const profilesQueryError = profilesRes.error
 
       setStats({
         accounts,
@@ -436,6 +554,16 @@ export default function AdministrationDashboardPage() {
       } else {
         const list = (subscriptionRows ?? []) as SubscriptionQueryRow[]
         setSubscriptionRowsForUpcoming(list)
+      }
+
+      if (profilesQueryError !== null) {
+        console.error("[dashboard] profiles", profilesQueryError)
+        setProfilesError(
+          "No se pudo cargar la lista de perfiles. Intenta de nuevo."
+        )
+        setProfileRowsRaw([])
+      } else {
+        setProfileRowsRaw((profilesRes.data ?? []) as ProfileQueryRow[])
       }
     } catch (e) {
       console.error("[dashboard] loadStats", e)
@@ -535,6 +663,124 @@ export default function AdministrationDashboardPage() {
             </Card>
           ))}
         </div>
+      </section>
+
+      <section aria-labelledby="profiles-heading" className="space-y-4">
+        <div className="flex flex-wrap items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+            <Users className="h-5 w-5" aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2
+              id="profiles-heading"
+              className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
+            >
+              Perfiles de todas las cuentas
+            </h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              Todos los perfiles activos en suscripciones. Busca por nombre del
+              cliente, cuenta o teléfono.
+            </p>
+          </div>
+        </div>
+
+        {profilesError && (
+          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+            {profilesError}
+          </p>
+        )}
+
+        <TableSearchInput
+          id="dashboard-profiles-search"
+          value={profilesSearch}
+          onChange={setProfilesSearch}
+          placeholder="Buscar por cliente, cuenta o teléfono…"
+          aria-label="Buscar perfiles por cliente, cuenta o teléfono"
+        />
+
+        <TableScrollArea>
+          <table className="w-full border-collapse text-left text-sm min-w-[max(100%,36rem)]">
+            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-950 dark:bg-emerald-950">
+              <tr className="text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-50">
+                <th className="px-4 py-3.5">Cliente</th>
+                <th className="px-4 py-3.5">Cuenta</th>
+                <th className="px-4 py-3.5">Teléfono</th>
+                <th className="px-4 py-3.5">Usuario</th>
+                {showPinColumn && <th className="px-4 py-3.5">PIN</th>}
+                <th className="px-4 py-3.5 text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoadingUi ? (
+                <tr>
+                  <td
+                    colSpan={showPinColumn ? 6 : 5}
+                    className="px-4 py-10 text-center text-sm"
+                  >
+                    <span className="inline-flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
+                      <RefreshCw
+                        className="h-4 w-4 animate-spin"
+                        aria-hidden
+                      />
+                      Cargando…
+                    </span>
+                  </td>
+                </tr>
+              ) : profileRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={showPinColumn ? 6 : 5}
+                    className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400"
+                  >
+                    No hay perfiles registrados en suscripciones.
+                  </td>
+                </tr>
+              ) : filteredProfileRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={showPinColumn ? 6 : 5}
+                    className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400"
+                  >
+                    No hay resultados para &quot;{profilesSearch.trim()}&quot;.
+                  </td>
+                </tr>
+              ) : (
+                filteredProfileRows.map((row) => (
+                  <tr
+                    key={row.id_subscription}
+                    className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
+                  >
+                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">
+                      {row.clientLabel}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {row.accountName}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                      {row.phone}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {row.user}
+                    </td>
+                    {showPinColumn && (
+                      <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        {row.pinIncluded ? row.pin : "—"}
+                      </td>
+                    )}
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        href={`/administration/subscriptions/${row.id_account}`}
+                        className="text-sm font-medium text-emerald-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-emerald-300 dark:focus-visible:outline-emerald-400"
+                      >
+                        Ver suscripción
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </TableScrollArea>
       </section>
 
       <section
