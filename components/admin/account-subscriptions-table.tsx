@@ -143,7 +143,7 @@ export function AccountSubscriptionsTable({
               <th className="py-3.5 px-4 text-center">Período en meses</th>
               <th
                 className="py-3.5 px-4"
-                title="Inicio de servicio + período en meses (mismo día del mes cuando el calendario lo permite). Igual que la columna Fecha de pago en Cobros pendientes del panel."
+                title="Inicio de servicio + período en meses (mismo día del mes cuando el calendario lo permite). En Cobros pendientes del panel ese día se muestra dentro del mes activo."
               >
                 Fecha de pago
               </th>

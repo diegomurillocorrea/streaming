@@ -113,9 +113,12 @@ type UpcomingPaymentRow = {
   pendingMonthLabel: string
   /** Precio al cliente de la cuenta (`account_price_by_client`), pago mensual esperado. */
   monthlyPriceDue: number | null
-  /** Orden en tabla por fecha de pago (sin fecha: al final). */
+  /** Día de cobro anclado al mes pendiente (`YYYY-MM-DD`); sin día usable: `9999-12-31`. */
   dueInPendingMonthIso: string
-  /** Vencimiento: inicio de servicio + período en meses (`YYYY-MM-DD`); null si falta inicio. */
+  /**
+   * Fecha de cobro en el mes pendiente del panel (mismo día del mes que
+   * inicio+período o `accounts.payment_date`). Null si no hay día usable.
+   */
   fechaDePagoIso: string | null
   fechaDePagoLabel: string
   phone: string
@@ -350,21 +353,23 @@ function buildUpcomingPaymentRows(
         ? String(sub.service_start_date).trim()
         : ""
 
-    const fechaDePagoIso = subscriptionCalendarPaymentDueYmd(
+    // Día de cobro (inicio + período); se ancla al mes pendiente del panel.
+    const nextCycleFromStartYmd = subscriptionCalendarPaymentDueYmd(
       serviceStartRaw || null,
       periodMonths
     )
 
-    const tieneFechaDePago = Boolean(fechaDePagoIso)
+    const dueInPendingMonthIso = subscriptionPaymentDueSortYmdInPendingMonth(
+      selectedMonthKey,
+      nextCycleFromStartYmd,
+      account?.payment_date ?? null
+    )
+
+    const tieneFechaDePago = dueInPendingMonthIso !== "9999-12-31"
+    const fechaDePagoIso = tieneFechaDePago ? dueInPendingMonthIso : null
     const fechaDePagoLabel = fechaDePagoIso
       ? formatShortDate(fechaDePagoIso)
       : "Sin inicio"
-
-    const dueInPendingMonthIso = subscriptionPaymentDueSortYmdInPendingMonth(
-      selectedMonthKey,
-      fechaDePagoIso,
-      account?.payment_date ?? null
-    )
 
     const firstName = client?.name?.trim() ?? ""
     const lastName = client?.lastName?.trim() ?? ""
@@ -665,6 +670,156 @@ export default function AdministrationDashboardPage() {
         </div>
       </section>
 
+      <section
+        aria-labelledby="upcoming-payments-heading"
+        className="space-y-4"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+              <CalendarClock className="h-5 w-5" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 gap-y-2">
+                <h2
+                  id="upcoming-payments-heading"
+                  className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
+                >
+                  Cobros pendientes (próximas fechas)
+                </h2>
+                <span
+                  className="inline-flex shrink-0 items-center rounded-full border border-emerald-500/35 bg-emerald-500/12 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-900 dark:border-emerald-400/40 dark:bg-emerald-950/70 dark:text-emerald-100"
+                  aria-label={`Período activo para esta tabla: ${monthLabel}`}
+                >
+                  Mes: {monthLabel}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                Solo cuentas cuya empresa tiene costo de membresía configurado;
+                el resto no entra en esta vista de cobros.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {upcomingError && (
+          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+            {upcomingError}
+          </p>
+        )}
+
+        <TableScrollArea>
+          <table className="w-full border-collapse text-left text-sm min-w-[max(100%,36rem)]">
+            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-950 dark:bg-emerald-950">
+              <tr className="text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-50">
+                <th className="px-4 py-3.5">Cliente</th>
+                <th className="px-4 py-3.5">Cuenta</th>
+                <th className="px-4 py-3.5">Teléfono</th>
+                <th className="whitespace-nowrap px-4 py-3.5 text-right">
+                  Pago mensual
+                </th>
+                <th className="whitespace-nowrap px-4 py-3.5">Mes pendiente</th>
+                <th
+                  className="whitespace-nowrap px-4 py-3.5"
+                  title="Día de cobro dentro del mes pendiente del panel (mismo día del mes que inicio de servicio + período, o el día de pago de la cuenta)."
+                >
+                  Fecha de pago
+                </th>
+                <th className="px-4 py-3.5 text-center">
+                  Enviar notificación
+                </th>
+                <th className="px-4 py-3.5 text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoadingUi ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-10 text-center text-sm">
+                    <span className="inline-flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
+                      <RefreshCw
+                        className="h-4 w-4 animate-spin"
+                        aria-hidden
+                      />
+                      Cargando…
+                    </span>
+                  </td>
+                </tr>
+              ) : upcomingRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400"
+                  >
+                    No hay cobros pendientes en alcance financiero para{" "}
+                    {monthLabel}, o todos los clientes ya tienen el monto
+                    completo ese mes.
+                  </td>
+                </tr>
+              ) : (
+                upcomingRows.map((row) => (
+                  <tr
+                    key={row.id_subscription}
+                    className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
+                  >
+                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">
+                      {row.clientLabel}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
+                      {row.accountName}
+                    </td>
+                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                      {row.phone}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums font-medium text-zinc-900 dark:text-zinc-50">
+                      {row.monthlyPriceDue === null
+                        ? "—"
+                        : formatMoney(row.monthlyPriceDue)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-zinc-800 dark:text-emerald-100">
+                      <span className="font-medium">{row.pendingMonthLabel}</span>
+                    </td>
+                    <td
+                      className={`whitespace-nowrap px-4 py-3 tabular-nums font-medium ${
+                        row.fechaDePagoIso
+                          ? "text-zinc-900 dark:text-emerald-50"
+                          : "text-amber-800 dark:text-amber-200"
+                      }`}
+                    >
+                      {row.fechaDePagoLabel}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {row.notifyUrl ? (
+                        <a
+                          href={row.notifyUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-emerald-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-emerald-300 dark:focus-visible:outline-emerald-400"
+                          aria-label={`Enviar notificación de pago a ${row.clientLabel}`}
+                        >
+                          Enviar notificación
+                        </a>
+                      ) : (
+                        <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                          Sin teléfono ni correo
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Link
+                        href={`/administration/subscriptions/${row.id_account}`}
+                        className="text-sm font-medium text-emerald-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-emerald-300 dark:focus-visible:outline-emerald-400"
+                      >
+                        Ver suscripción
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </TableScrollArea>
+      </section>
+
       <section aria-labelledby="profiles-heading" className="space-y-4">
         <div className="flex flex-wrap items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
@@ -767,156 +922,6 @@ export default function AdministrationDashboardPage() {
                         {row.pinIncluded ? row.pin : "—"}
                       </td>
                     )}
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/administration/subscriptions/${row.id_account}`}
-                        className="text-sm font-medium text-emerald-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-emerald-300 dark:focus-visible:outline-emerald-400"
-                      >
-                        Ver suscripción
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </TableScrollArea>
-      </section>
-
-      <section
-        aria-labelledby="upcoming-payments-heading"
-        className="space-y-4"
-      >
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="flex flex-wrap items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
-              <CalendarClock className="h-5 w-5" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2 gap-y-2">
-                <h2
-                  id="upcoming-payments-heading"
-                  className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
-                >
-                  Cobros pendientes (próximas fechas)
-                </h2>
-                <span
-                  className="inline-flex shrink-0 items-center rounded-full border border-emerald-500/35 bg-emerald-500/12 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-900 dark:border-emerald-400/40 dark:bg-emerald-950/70 dark:text-emerald-100"
-                  aria-label={`Período activo para esta tabla: ${monthLabel}`}
-                >
-                  Mes: {monthLabel}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                Solo cuentas cuya empresa tiene costo de membresía configurado;
-                el resto no entra en esta vista de cobros.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {upcomingError && (
-          <p className="text-sm text-red-600 dark:text-red-400" role="alert">
-            {upcomingError}
-          </p>
-        )}
-
-        <TableScrollArea>
-          <table className="w-full border-collapse text-left text-sm min-w-[max(100%,36rem)]">
-            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-white dark:border-emerald-950 dark:bg-emerald-950">
-              <tr className="text-xs font-semibold uppercase text-zinc-500 dark:text-emerald-50">
-                <th className="px-4 py-3.5">Cliente</th>
-                <th className="px-4 py-3.5">Cuenta</th>
-                <th className="px-4 py-3.5">Teléfono</th>
-                <th className="whitespace-nowrap px-4 py-3.5 text-right">
-                  Pago mensual
-                </th>
-                <th className="whitespace-nowrap px-4 py-3.5">Mes pendiente</th>
-                <th
-                  className="whitespace-nowrap px-4 py-3.5"
-                  title="Igual que la columna Fecha de pago en Suscripciones: inicio de servicio + período en meses."
-                >
-                  Fecha de pago
-                </th>
-                <th className="px-4 py-3.5 text-center">
-                  Enviar notificación
-                </th>
-                <th className="px-4 py-3.5 text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoadingUi ? (
-                <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-sm">
-                    <span className="inline-flex items-center gap-2 text-zinc-500 dark:text-zinc-400">
-                      <RefreshCw
-                        className="h-4 w-4 animate-spin"
-                        aria-hidden
-                      />
-                      Cargando…
-                    </span>
-                  </td>
-                </tr>
-              ) : upcomingRows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-4 py-10 text-center text-sm text-zinc-500 dark:text-zinc-400"
-                  >
-                    No hay cobros pendientes en alcance financiero para{" "}
-                    {monthLabel}, o todos los clientes ya tienen el monto
-                    completo ese mes.
-                  </td>
-                </tr>
-              ) : (
-                upcomingRows.map((row) => (
-                  <tr
-                    key={row.id_subscription}
-                    className="border-b border-zinc-100 last:border-b-0 dark:border-emerald-900/60"
-                  >
-                    <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-50">
-                      {row.clientLabel}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
-                      {row.accountName}
-                    </td>
-                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                      {row.phone}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums font-medium text-zinc-900 dark:text-zinc-50">
-                      {row.monthlyPriceDue === null
-                        ? "—"
-                        : formatMoney(row.monthlyPriceDue)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-zinc-800 dark:text-emerald-100">
-                      <span className="font-medium">{row.pendingMonthLabel}</span>
-                    </td>
-                    <td
-                      className={`whitespace-nowrap px-4 py-3 tabular-nums font-medium ${
-                        row.fechaDePagoIso
-                          ? "text-zinc-900 dark:text-emerald-50"
-                          : "text-amber-800 dark:text-amber-200"
-                      }`}
-                    >
-                      {row.fechaDePagoLabel}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {row.notifyUrl ? (
-                        <a
-                          href={row.notifyUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium text-emerald-700 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-emerald-300 dark:focus-visible:outline-emerald-400"
-                          aria-label={`Enviar notificación de pago a ${row.clientLabel}`}
-                        >
-                          Enviar notificación
-                        </a>
-                      ) : (
-                        <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                          Sin teléfono ni correo
-                        </span>
-                      )}
-                    </td>
                     <td className="px-4 py-3 text-right">
                       <Link
                         href={`/administration/subscriptions/${row.id_account}`}

@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
 
 import {
     Dialog,
@@ -474,12 +475,11 @@ function ClientsAdminPageContent() {
 
                         <div className="space-y-1">
                             <Label htmlFor="new-phone">Teléfono</Label>
-                            <Input
+                            <PhoneInput
                                 id="new-phone"
-                                type="tel"
-                                placeholder="+503 0000 0000"
+                                placeholder="0000 0000"
                                 value={formPhoneNumber}
-                                onChange={(e) => setFormPhoneNumber(e.target.value)}
+                                onChange={setFormPhoneNumber}
                                 disabled={saving}
                             />
                         </div>
@@ -554,11 +554,11 @@ function ClientsAdminPageContent() {
 
                         <div className="space-y-1">
                             <Label htmlFor="edit-phone">Teléfono</Label>
-                            <Input
+                            <PhoneInput
                                 id="edit-phone"
-                                type="tel"
+                                placeholder="0000 0000"
                                 value={formPhoneNumber}
-                                onChange={(e) => setFormPhoneNumber(e.target.value)}
+                                onChange={setFormPhoneNumber}
                                 disabled={saving}
                             />
                         </div>
