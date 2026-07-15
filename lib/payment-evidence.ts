@@ -11,13 +11,20 @@ const RECEIPT_ALLOWED = new Set([
   "application/pdf",
 ])
 
+export const hasReceiptEvidence = (payment: {
+  receipt_storage_path?: string | null
+}): boolean => {
+  const path = (payment.receipt_storage_path ?? "").trim()
+  return path.length > 0
+}
+
+/** Evidencia: archivo de comprobante (preferido) o referencia de texto legacy. */
 export const hasPaymentEvidence = (payment: {
   payment_reference?: string | null
   receipt_storage_path?: string | null
 }): boolean => {
   const ref = (payment.payment_reference ?? "").trim()
-  const path = (payment.receipt_storage_path ?? "").trim()
-  return ref.length > 0 || path.length > 0
+  return hasReceiptEvidence(payment) || ref.length > 0
 }
 
 export const isReceiptMimeAllowed = (mime: string): boolean =>

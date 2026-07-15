@@ -97,6 +97,42 @@ export function formatSpanishMonthYearFromIso(
 }
 
 /**
+ * Día, mes y año en español desde `YYYY-MM-DD` / ISO (sin corrimiento UTC).
+ */
+export function formatSpanishDayMonthYearFromIso(
+  iso: string | null | undefined
+): string {
+  if (!iso?.trim()) return "—"
+  const raw = String(iso).trim()
+  const datePart = raw.includes("T")
+    ? raw.split("T")[0]
+    : raw.split(" ")[0] ?? raw
+  const d = new Date(`${datePart}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return "—"
+  return new Intl.DateTimeFormat("es", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(d)
+}
+
+/**
+ * Extrae `YYYY-MM-DD` de un timestamptz / date para inputs type="date".
+ */
+export function ymdFromIsoDate(iso: string | null | undefined): string {
+  if (!iso?.trim()) return ""
+  return String(iso).trim().split("T")[0] ?? ""
+}
+
+/**
+ * Meses de diferencia entre dos claves `año-mesJS` (selected - anchor).
+ * Positivo si selected es posterior al ancla.
+ */
+export function calendarMonthDiff(selectedKey: string, anchorKey: string): number {
+  return compareCalendarMonthKeys(selectedKey, anchorKey)
+}
+
+/**
  * Suma meses calendario a una fecha `YYYY-MM-DD` usando mediodía local
  * (reduce saltos por DST al avanzar el mes).
  */

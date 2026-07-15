@@ -3,7 +3,9 @@ import type {
   SubscriptionTableRow,
 } from "@/components/admin/account-subscriptions-table"
 import {
-  findPaymentCoveringCalendarMonth,
+  findPaymentInCoverageWindow,
+  normalizeMonthsCovered,
+  remainingCoveredMonths,
   subscriptionPaymentBadgeStatus,
 } from "@/lib/payment-confirmation"
 import {
@@ -19,6 +21,7 @@ export type SubscriptionPaymentPayload = {
   paid_month?: string | null
   payment_reference?: string | null
   receipt_storage_path?: string | null
+  months_covered?: number | null
   bank_accounts?: unknown
 }
 
@@ -76,49 +79,45 @@ export const buildSubscriptionTableRows = (
       return monthKeyFromDateOnly(p.paid_month) === selectedMonthKey
     })
 
-    const paymentForEdit = paymentThisMonth ?? null
+    const coveringPayment = findPaymentInCoverageWindow(
+      payments,
+      selectedMonthKey
+    )
 
-    const coveringPayment =
-      paymentForEdit != null
-        ? null
-        : findPaymentCoveringCalendarMonth(
-            payments,
-            selectedMonthKey,
-            accountPrice,
-            sub.period_in_months
-          )
+    // Preferimos la fila ancla del mes activo; si no, la que cubre el mes.
+    const effectivePaymentRow = paymentThisMonth ?? coveringPayment
 
-    const effectivePaymentRow = paymentForEdit ?? coveringPayment
+    const remainingMonths = effectivePaymentRow
+      ? remainingCoveredMonths(effectivePaymentRow, selectedMonthKey)
+      : 0
 
-    /** Último pago (por mes) que ya tiene cuenta/banco — mismo método mes a mes hasta que se cambie y guarde. */
+    const coveredByPriorMonth =
+      paymentThisMonth == null && coveringPayment != null
+
     const latestPaymentWithBank = sortedPayments.find((p) => {
       const id = p.id_bank_account
       return id != null && id !== undefined && !Number.isNaN(Number(id))
     })
 
     const bankSourcePayment =
-      paymentThisMonth?.id_bank_account != null
-        ? paymentThisMonth
-        : coveringPayment?.id_bank_account != null
-          ? coveringPayment
-          : latestPaymentWithBank ?? null
+      effectivePaymentRow?.id_bank_account != null
+        ? effectivePaymentRow
+        : latestPaymentWithBank ?? null
 
     const lastPaymentBankData: unknown = bankSourcePayment?.bank_accounts
 
     let lastPaymentAmount: number | null = null
-    if (paymentForEdit) {
-      const raw = paymentForEdit.amount
-      if (raw !== null && raw !== undefined) {
-        const n = Number(raw)
-        if (!Number.isNaN(n)) lastPaymentAmount = n
-      }
-    } else if (coveringPayment) {
-      const raw = coveringPayment.amount
+    if (effectivePaymentRow) {
+      const raw = effectivePaymentRow.amount
       if (raw !== null && raw !== undefined) {
         const n = Number(raw)
         if (!Number.isNaN(n)) lastPaymentAmount = n
       }
     }
+
+    const monthsCoveredOnPayment = effectivePaymentRow
+      ? normalizeMonthsCovered(effectivePaymentRow.months_covered)
+      : null
 
     const status: SubscriptionPaymentBadgeStatus =
       !subscriptionDebtAppliesToCalendarMonthKey(
@@ -129,9 +128,16 @@ export const buildSubscriptionTableRows = (
         : subscriptionPaymentBadgeStatus(
             payments,
             selectedMonthKey,
-            accountPrice,
-            sub.period_in_months
+            accountPrice
           )
+
+    // Período mostrado: restante si hay cobertura; si no, sugerencia de suscripción o 1.
+    const periodDisplay =
+      remainingMonths > 0
+        ? remainingMonths
+        : sub.period_in_months != null && sub.period_in_months > 0
+          ? Math.floor(Number(sub.period_in_months))
+          : 1
 
     return {
       id_subscription: sub.id_subscription,
@@ -146,9 +152,12 @@ export const buildSubscriptionTableRows = (
       email: client?.email ?? "-",
       phone: client?.phoneNumber ?? "-",
       serviceStartRaw: sub.service_start_date ?? null,
-      periodInMonths: sub.period_in_months ?? null,
+      periodInMonths: periodDisplay,
+      monthsCovered: monthsCoveredOnPayment,
+      remainingMonths,
+      coveredByPriorMonth,
       monthsPaid,
-      lastPaidMonth: lastPayment?.paid_month ?? null,
+      lastPaidMonth: effectivePaymentRow?.paid_month ?? lastPayment?.paid_month ?? null,
       lastPaymentDate:
         effectivePaymentRow?.payment_date ?? lastPayment?.payment_date ?? null,
       lastPaymentAmount,

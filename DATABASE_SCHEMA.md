@@ -115,6 +115,7 @@ create table if not exists payments (
   amount numeric(10, 2) not null default 0 check (amount >= 0),
   payment_date timestamptz not null default now(),
   paid_month date not null,
+  months_covered integer not null default 1 check (months_covered > 0 and months_covered <= 24),
   payment_reference text null,
   receipt_storage_path text null,
   created_at timestamptz not null default now(),

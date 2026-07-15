@@ -2,7 +2,6 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { createClient as createServerClient } from "@/utils/supabase/server"
 import { AccountSubscriptionsPanel } from "@/components/admin/account-subscriptions-panel"
-import { FinishMonthButton } from "@/components/interface/FinishMonthButton"
 import { CopyAccountCredentialsButton } from "@/components/interface/copy-account-credentials-button"
 import { getMaxClients } from "@/lib/account-max-clients"
 import { accountLacksPaymentDayAndPrice } from "@/lib/account-subscriptions-access"
@@ -144,6 +143,7 @@ export default async function AccountSubscriptionsPage({
           amount,
           payment_date,
           paid_month,
+          months_covered,
           payment_reference,
           receipt_storage_path,
           bank_accounts (
@@ -338,23 +338,12 @@ export default async function AccountSubscriptionsPage({
                 <span className="font-medium text-zinc-900 dark:text-emerald-50">
                   ${accountPrice.toFixed(2)}
                 </span>{" "}
-                <span className="text-zinc-400 dark:text-emerald-500">
-                  (se usa para marcar si el pago del mes está completo)
+                <span className="text-zinc-400 dark:text-zinc-500">
+                  (umbral del prepago: precio × meses cubiertos)
                 </span>
               </p>
             )}
           </div>
-        </div>
-        <div className="flex max-w-sm shrink-0 flex-col items-end gap-2 text-right">
-          <FinishMonthButton accountId={accountId} />
-          <p className="text-xs text-zinc-500 dark:text-emerald-400">
-            Tras cerrar mes las fechas de servicio avanzan; para ver pendientes de
-            un mes pasado (p. ej. abril), elige ese mes en el modal de la pestaña{" "}
-            <strong className="font-medium text-zinc-700 dark:text-emerald-200">
-              Periodo
-            </strong>{" "}
-            del menú lateral.
-          </p>
         </div>
       </header>
 

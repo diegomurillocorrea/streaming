@@ -129,6 +129,7 @@ type UpcomingPaymentRow = {
 type SubscriptionPaymentRow = {
   paid_month?: string | null
   amount?: number | null
+  months_covered?: number | null
   payment_reference?: string | null
   receipt_storage_path?: string | null
 }

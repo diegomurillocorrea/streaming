@@ -40,6 +40,7 @@ interface SubscriptionNested {
 
 interface PaymentRow {
   amount?: number | null
+  months_covered?: number | null
   id_subscription?: number | null
   subscriptions?: SubscriptionNested | SubscriptionNested[] | null
 }
@@ -116,6 +117,7 @@ export default function MonthlyFinancePage() {
           .select(
             `
             amount,
+            months_covered,
             id_subscription,
             subscriptions!inner (
               id_account,
@@ -247,7 +249,7 @@ export default function MonthlyFinancePage() {
       const confirmed = isPaymentRowConfirmed(
         p.amount,
         account.account_price_by_client,
-        sub.period_in_months
+        p.months_covered
       )
       if (confirmed) {
         entry.paidCount += 1

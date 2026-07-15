@@ -40,20 +40,18 @@ export const formatHtmlMonthLabel = (htmlMonth: string): string => {
   }).format(bounds.start)
 }
 
+/**
+ * Confirma monto del pago ancla: amount >= precio * months_covered.
+ * El 3er argumento es months_covered (antes era period_in_months).
+ */
 export const isPaymentRowConfirmed = (
   amount: number | null | undefined,
   accountPriceByClient: number | null | undefined,
-  subscriptionPeriodMonths?: number | null
+  monthsCovered?: number | null
 ): boolean =>
-  isPaymentSlotAmountConfirmed(
-    amount,
-    accountPriceByClient,
-    subscriptionPeriodMonths
-  )
+  isPaymentSlotAmountConfirmed(amount, accountPriceByClient, monthsCovered ?? 1)
 
-export const parseCompanyMembershipCost = (
-  companies: unknown
-): number => {
+export const parseCompanyMembershipCost = (companies: unknown): number => {
   const co = Array.isArray(companies) ? companies[0] : companies
   const v = (co as { membership_monthly_cost?: unknown } | null)
     ?.membership_monthly_cost

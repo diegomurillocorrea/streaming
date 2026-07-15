@@ -23,6 +23,7 @@ const DASHBOARD_SUBSCRIPTIONS_SELECT = `
   payments (
     amount,
     paid_month,
+    months_covered,
     payment_reference,
     receipt_storage_path
   )
